@@ -1,10 +1,11 @@
 import Link from 'next/link';
-import React, { memo, useMemo } from 'react';
+import React, { memo } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
+import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
 import { type PluggableList } from 'unified';
+
 import { CodeBlock } from './code-block';
 import 'katex/dist/katex.min.css';
 

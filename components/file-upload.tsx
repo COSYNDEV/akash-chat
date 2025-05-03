@@ -1,10 +1,12 @@
+import { FileText, X, Loader2 } from "lucide-react";
 import * as React from "react";
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
-import { cn } from "@/lib/utils";
-import { FileText, X, Loader2 } from "lucide-react";
-import { Button } from "./ui/button";
+
 import { trackEvent } from '@/lib/analytics';
+import { cn } from "@/lib/utils";
+
+import { Button } from "./ui/button";
 
 interface FileUploadProps {
   onFileSelect: (files: File[]) => Promise<void>;

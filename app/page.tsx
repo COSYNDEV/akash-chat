@@ -1,5 +1,6 @@
-import { ChatHome } from '@/components/chat-home';
 import { Metadata } from 'next';
+
+import { ChatHome } from '@/components/chat/chat-home';
 
 export const metadata: Metadata = {
   title: 'AkashChat - Chat with Open Source AI Models',

@@ -1,7 +1,6 @@
 {
-  "name": "next-openai",
+  "name": "akashchat",
   "version": "0.0.0",
-  "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -61,9 +60,14 @@
     "@types/node": "^17.0.12",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
     "autoprefixer": "^10.4.14",
     "eslint": "8.57.1",
     "eslint-config-next": "14.2.3",
+    "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.15",
     "typescript": "5.6.3"

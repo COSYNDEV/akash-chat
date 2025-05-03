@@ -1,9 +1,11 @@
-import { NextResponse } from 'next/server';
-import { validateSession, storeSession } from '@/lib/redis';
 import crypto from 'crypto';
-import redis from '@/lib/redis';
-import { ACCESS_TOKEN, CACHE_TTL } from '@/app/config/api';
+
+import { NextResponse } from 'next/server';
+
+import { CACHE_TTL } from '@/app/config/api';
 import { checkApiAccessToken } from '@/lib/auth';
+import { validateSession, storeSession } from '@/lib/redis';
+import redis from '@/lib/redis';
 
 const RATE_LIMIT_WINDOW = Math.floor(CACHE_TTL * 0.20 * 0.25);
 const MAX_REQUESTS = 3;
@@ -55,7 +57,6 @@ export async function POST(request: Request) {
         if (authCheckResponse) {
             return authCheckResponse;
         }
-
 
         if (await isRateLimited(currentToken)) {
             return NextResponse.json(

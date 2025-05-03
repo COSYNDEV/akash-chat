@@ -1,7 +1,8 @@
 import './globals.css';
+import { GoogleTagManager } from '@next/third-parties/google';
 import { Inter } from 'next/font/google';
 import { ThemeProvider } from 'next-themes';
-import { GoogleTagManager } from '@next/third-parties/google';
+
 import { ChatProvider } from './context/ChatContext';
 
 const inter = Inter({ subsets: ['latin'] });

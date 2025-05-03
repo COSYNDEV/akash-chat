@@ -1,17 +1,12 @@
+import { FileText, X, ChevronDown, ChevronUp } from "lucide-react";
 import * as React from "react";
 import { useState } from "react";
-import { FileText, X, ChevronDown, ChevronUp } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Button } from "./ui/button";
-import { FileUpload } from "./file-upload";
 
-interface ContextFile {
-  id: string;
-  name: string;
-  content: string;
-  type: string;
-  preview?: string;
-}
+import { ContextFile } from "@/app/context/ChatContext";
+import { cn } from "@/lib/utils";
+
+import { FileUpload } from "./file-upload";
+import { Button } from "./ui/button";
 
 interface FileContextProps {
   onFilesChange: (files: ContextFile[]) => void;

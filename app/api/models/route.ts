@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getAvailableModels } from '@/lib/models';
+
 import { withAuth } from '@/lib/auth';
+import { getAvailableModels } from '@/lib/models';
 
 async function handleGetRequest() {
     const models = await getAvailableModels();

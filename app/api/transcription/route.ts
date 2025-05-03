@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+
 import { WS_TRANSCRIPTION_URLS, WS_TRANSCRIPTION_MODEL } from '@/app/config/api';
 import { withAuth } from '@/lib/auth';
 

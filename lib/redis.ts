@@ -1,4 +1,5 @@
 import Redis from 'ioredis';
+
 import { CACHE_TTL } from '@/app/config/api';
 
 // Initialize Redis client
@@ -35,7 +36,7 @@ export async function validateSession(sessionToken: string): Promise<boolean> {
 
   try {
     const sessionData = await redis.get(`session:${sessionToken}`);
-    if (!sessionData) return false;
+    if (!sessionData) {return false;}
 
     // Parse and validate session data
     const data = JSON.parse(sessionData) as SessionData;

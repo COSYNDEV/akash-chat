@@ -1,18 +1,21 @@
 'use client';
 
-
+import { Message as AIMessage } from 'ai';
 import { AlertCircle, LoaderCircle } from 'lucide-react';
-import { AkashChatLogo } from '@/components/branding/akash-chat-logo';
-import { ChatSidebar } from '@/components/chat-sidebar';
-import { cn } from '@/lib/utils';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useSwipeable } from 'react-swipeable';
-import { ChatHeader } from '@/components/chat-header';
 import { useWindowSize } from 'usehooks-ts';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+
+import { Model } from '@/app/config/models';
+import { AkashChatLogo } from '@/components/branding/akash-chat-logo';
+import { ChatHeader } from '@/components/chat/chat-header';
+import { ChatHistory, ChatSidebar } from '@/components/chat/chat-sidebar';
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Folder } from '@/hooks/use-folders';
+import { cn } from '@/lib/utils';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -20,17 +23,17 @@ interface MainLayoutProps {
   setSidebarOpen: (open: boolean) => void;
   modelSelection: string;
   setModelSelection: (model: string) => void;
-  availableModels: any[];
+  availableModels: Model[];
   isLoadingModels: boolean;
   selectedChat: string | null;
   setSelectedChat: (chatId: string) => void;
-  handleMessagesSelect: (messages: any[]) => void;
+  handleMessagesSelect: (messages: AIMessage[]) => void;
   handleNewChat: () => void;
-  chats: any[];
+  chats: ChatHistory[];
   deleteChat: (chatId: string) => void;
   renameChat: (chatId: string, newName: string) => void;
   moveToFolder: (chatId: string, folderId: string | null) => void;
-  folders: any[];
+  folders: Folder[];
   createFolder: (name: string) => void;
   updateFolder: (folderId: string, name: string) => void;
   deleteFolder: (folderId: string) => void;

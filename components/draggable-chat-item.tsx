@@ -1,8 +1,8 @@
-import { useDrag } from 'react-dnd';
-import { cn } from '@/lib/utils';
 import { Message } from 'ai';
 import { useState } from 'react';
-import { GitBranch } from 'lucide-react';
+import { useDrag } from 'react-dnd';
+
+import { cn } from '@/lib/utils';
 
 interface ChatItem {
   id: string;
@@ -73,6 +73,7 @@ export function DraggableChatItem({
 
   return (
     <div
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ref={drag as any}
       className={cn(
         "group relative",

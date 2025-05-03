@@ -1,19 +1,21 @@
 'use client';
 
-import { AnimatePresence, motion } from 'framer-motion';
-import { cn } from '@/lib/utils';
 import { Message } from 'ai';
-import { useState, useEffect, useRef } from 'react';
-import { Folder } from '@/hooks/use-folders';
-import { DraggableChatItem } from './draggable-chat-item';
-import { DroppableFolder } from './droppable-folder';
-import { useDrop } from 'react-dnd';
+import { AnimatePresence, motion } from 'framer-motion';
 import { FolderPlus, CirclePlus, PanelRightOpen, Heart, CircleHelp, Ellipsis, PlugZap, Globe, ChartBarBig, ChartColumnIncreasing, Settings, Package } from 'lucide-react';
 import Link from 'next/link';
-import { Button } from './ui/button';
 import { useRouter, usePathname } from 'next/navigation';
+import { useState, useEffect, useRef } from 'react';
+import { useDrop } from 'react-dnd';
 
-interface ChatHistory {
+import { Folder } from '@/hooks/use-folders';
+import { cn } from '@/lib/utils';
+
+import { DraggableChatItem } from '../draggable-chat-item';
+import { DroppableFolder } from '../droppable-folder';
+import { Button } from '../ui/button';
+
+export interface ChatHistory {
   id: string;
   name: string;
   messages: Message[];
@@ -72,6 +74,7 @@ export function ChatSidebar({
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState('');
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const [hoveredFolder, setHoveredFolder] = useState<string | null>(null);
   const [isResourcesOpen, setIsResourcesOpen] = useState(false);
@@ -143,7 +146,7 @@ export function ChatSidebar({
     }
   };
 
-  const [{ isOver }, dropRef] = useDrop<{ id: string; type: string }, void, { isOver: boolean }>(() => ({
+  const [{}, dropRef] = useDrop<{ id: string; type: string }, void, { isOver: boolean }>(() => ({
     accept: 'CHAT',
     drop: (item, monitor) => {
       if (monitor.isOver({ shallow: true })) {
@@ -155,8 +158,11 @@ export function ChatSidebar({
     }),
   }));
 
+  const dropRefElement = useRef<HTMLDivElement>(null);
+  dropRef(dropRefElement);
+
   const handleChatSelect = (chatId: string) => {
-    if (isLoading) return;
+    if (isLoading) {return;}
     const chat = chats.find(c => c.id === chatId);
     if (chat) {
       setSelectedChat(chatId);
@@ -181,7 +187,7 @@ export function ChatSidebar({
 
   const handleRenameSubmit = (chatId: string, newName: string) => {
     const trimmedName = newName.trim();
-    if (!trimmedName) return;
+    if (!trimmedName) {return;}
 
     // Limit name length to 20 characters
     const limitedName = trimmedName.length > 20
@@ -219,7 +225,7 @@ export function ChatSidebar({
               onSubmit={(e) => {
                 e.preventDefault();
                 const input = e.currentTarget.querySelector('input');
-                if (input) handleRenameSubmit(chat.id, input.value);
+                if (input) {handleRenameSubmit(chat.id, input.value);}
               }}
               className="p-2"
             >
@@ -323,6 +329,7 @@ export function ChatSidebar({
 
               {/* Chat List */}
               <div
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 ref={dropRef as any}
                 className="flex-1 overflow-y-auto p-2"
               >
@@ -368,7 +375,7 @@ export function ChatSidebar({
                       onSubmit={(e) => {
                         e.preventDefault();
                         const input = e.currentTarget.querySelector('input');
-                        if (input) handleFolderRenameSubmit(folder.id, input.value);
+                        if (input) {handleFolderRenameSubmit(folder.id, input.value);}
                       }}
                       className="mt-4"
                     >
@@ -645,6 +652,7 @@ export function ChatSidebar({
                   <Button
                     variant="ghost"
                     className="w-full justify-start gap-2 h-8 px-2 text-sm font-light hover:bg-white dark:hover:bg-accent hover:text-accent-foreground"
+                    onClick={() => isMobile && setSidebarOpen(false)}
                   >
                     <Package className="w-3.5 h-3.5" />
                     <span>Models</span>

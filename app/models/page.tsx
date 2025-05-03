@@ -1,4 +1,5 @@
 import { Metadata } from 'next';
+
 import { ModelsPageClient } from '@/components/models/models-page-client';
 
 export const metadata: Metadata = {

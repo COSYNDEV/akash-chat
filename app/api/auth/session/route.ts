@@ -1,8 +1,10 @@
-import { NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { storeSession } from '@/lib/redis';
-import { ACCESS_TOKEN, CACHE_TTL } from '@/app/config/api';
+
+import { NextResponse } from 'next/server';
+
+import { CACHE_TTL } from '@/app/config/api';
 import { checkApiAccessToken } from '@/lib/auth';
+import { storeSession } from '@/lib/redis';
 
 export async function GET(request: Request) {
   if (process.env.NODE_ENV === 'production') {

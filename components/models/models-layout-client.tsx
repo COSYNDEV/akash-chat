@@ -1,7 +1,7 @@
 'use client';
 
-import { MainLayout } from '@/components/layout/MainLayout';
 import { useChatContext } from '@/app/context/ChatContext';
+import { MainLayout } from '@/components/layout/MainLayout';
 import { ModelConfig } from '@/components/model-config';
 
 interface ModelsLayoutClientProps {

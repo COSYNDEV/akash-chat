@@ -1,6 +1,6 @@
+import type { Message as AIMessage } from 'ai';
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
-import type { Message as AIMessage } from 'ai';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -26,7 +26,7 @@ export const processMessages = (messages: AIMessage[]): AIMessage[] => {
  * @returns The raw access token or null if not found
  */
 export const getAccessToken = () => {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === 'undefined') {return null;}
   
   const currentToken = localStorage.getItem('akt_priv_access');
   return currentToken;
@@ -37,7 +37,7 @@ export const getAccessToken = () => {
  * @param token The raw access token to hash and store
  */
 export const storeAccessToken = async (token: string): Promise<void> => {
-  if (typeof window === 'undefined' || !token.trim()) return;
+  if (typeof window === 'undefined' || !token.trim()) {return;}
   
   try {
     // Use SubtleCrypto API for client-side hashing

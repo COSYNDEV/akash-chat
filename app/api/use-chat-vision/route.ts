@@ -1,5 +1,6 @@
 import { openai } from '@ai-sdk/openai';
 import { streamText } from 'ai';
+
 import { withAuth } from '@/lib/auth';
 
 // Allow streaming responses up to 30 seconds
