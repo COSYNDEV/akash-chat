@@ -1,13 +1,14 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import { streamText, createDataStreamResponse, generateText, simulateReadableStream, Message } from 'ai';
+
 import { apiEndpoint, apiKey, imgGenFnModel, DEFAULT_SYSTEM_PROMPT } from '@/app/config/api';
 import { defaultModel, models } from '@/app/config/models';
-import { generateImageTool } from '@/lib/tools';
-import { getAvailableModels } from '@/lib/models';
 import { withAuth } from '@/lib/auth';
+import { getAvailableModels } from '@/lib/models';
+import { generateImageTool } from '@/lib/tools';
 
-const { Tiktoken } = require("tiktoken/lite");
 const cl100k_base = require("tiktoken/encoders/cl100k_base.json");
+const { Tiktoken } = require("tiktoken/lite");
 
 // Allow streaming responses up to 30 seconds
 export const maxDuration = 30;
@@ -26,11 +27,12 @@ const openai = createOpenAI({
 // Define the handler function to be wrapped with authentication
 async function handlePostRequest(req: Request) {
   // Extract the `messages` and `model` from the body of the request
-  let { messages, model, system, temperature, topP, context } = await req.json();  
+  const body = await req.json();
+  const { messages, system, temperature, topP, context } = body;
+  let { model } = body;
   // Get available models from cache or API
   const allModels = await getAvailableModels();
   const selectedModel = allModels.find(m => m.id === model) || models.find(m => m.id === defaultModel);
-
 
   const encoding = new Tiktoken(
     cl100k_base.bpe_ranks,
@@ -130,7 +132,6 @@ async function handlePostRequest(req: Request) {
     }
   }
 
-
   return createDataStreamResponse({
     execute: dataStream => {
       const result = streamText({
@@ -167,5 +168,3 @@ async function handlePostRequest(req: Request) {
 
 // Export the wrapped handler
 export const POST = withAuth(handlePostRequest);
-
-

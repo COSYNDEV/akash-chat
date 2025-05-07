@@ -1,7 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { validateSession } from './redis';
-import { ACCESS_TOKEN } from '@/app/config/api';
 import * as crypto from 'crypto';
+
+import { NextRequest, NextResponse } from 'next/server';
+
+import { ACCESS_TOKEN } from '@/app/config/api';
+
+import { validateSession } from './redis';
 
 const HASHED_ACCESS_TOKEN = ACCESS_TOKEN ? 
   crypto.createHash('sha256').update(ACCESS_TOKEN).digest('hex') : null;
@@ -12,7 +15,7 @@ export async function validateSessionToken(req: NextRequest) {
       .find(c => c.trim().startsWith('session_token='))
       ?.split('=')[1];
 
-  if (!sessionToken) return false;
+  if (!sessionToken) {return false;}
   
   try {
     return await validateSession(sessionToken);

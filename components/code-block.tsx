@@ -1,13 +1,13 @@
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Copy, Check } from 'lucide-react';
 import { useState } from 'react';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 interface CodeBlockProps {
-    node: any;
+    node: React.ReactNode;
     inline: boolean;
     className: string;
-    children: any;
+    children: React.ReactNode;
 }
 
 export function CodeBlock({

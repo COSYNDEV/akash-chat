@@ -1,19 +1,20 @@
 'use client';
 
-import { Button } from "@/components/ui/button";
-import { models, Model } from "@/app/config/models";
-import { ArrowRight, Bookmark, Gauge, Info, MessageCircle, Layers, Github, Settings } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useChatContext } from "@/app/context/ChatContext";
 import { motion } from "framer-motion";
-import { cn } from "@/lib/utils";
+import { ArrowRight, Gauge, Info, MessageCircle, Layers, Settings } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
+
+import { models, Model } from "@/app/config/models";
+import { useChatContext } from "@/app/context/ChatContext";
 import { ModelConfig } from '@/components/model-config';
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface ModelDetailClientProps {
   modelId: string;
-  model?: Model; // Optional prop, will be passed from server component
+  model?: Model;
 }
 
 export function ModelDetailClient({ modelId, model: serverModel }: ModelDetailClientProps) {
@@ -52,7 +53,7 @@ export function ModelDetailClient({ modelId, model: serverModel }: ModelDetailCl
 
   // Function to start a chat with this model
   const startChat = () => {
-    if (!model.available) return;
+    if (!model.available) {return;}
 
     setModelSelection(model.id);
     handleNewChat();

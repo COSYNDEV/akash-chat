@@ -1,7 +1,6 @@
-import { Model } from "@/app/config/models";
-import { Llama1Logo } from "./llama-1";
 import { AkashGenLogo } from "./akash-gen";
 import { DeepSeekLogo } from "./deepseek";
+import { Llama1Logo } from "./llama-1";
 import { Llama2Logo } from "./llama-2";
 import { Llama3Logo } from "./llama-3";
 import { Llama4Logo } from "./llama-4";

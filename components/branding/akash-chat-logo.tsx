@@ -1,3 +1,4 @@
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const AkashChatLogo = (props: any) => {
   return (
     <svg

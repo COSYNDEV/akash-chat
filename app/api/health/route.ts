@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+
 import { apiEndpoint, apiKey, imgEndpoint, imgApiKey } from '@/app/config/api';
 import { models } from '@/app/config/models';
 

@@ -16,12 +16,6 @@ interface OldChatHistory {
   folderId: string | null;
 }
 
-interface OldFolder {
-  id: string;
-  name: string;
-  type: string;
-}
-
 export function migrateOldChats() {
   try {
     // Check if we've already migrated
@@ -53,7 +47,6 @@ export function migrateOldChats() {
       // Migrate folders if they exist
       const oldFolders = localStorage.getItem('folders');
       if (oldFolders) {
-        const folders: OldFolder[] = JSON.parse(oldFolders);
         // The folder format is compatible, so we can just keep it
         localStorage.setItem('folders', oldFolders);
       }
@@ -64,8 +57,6 @@ export function migrateOldChats() {
 
       // Mark migration as completed
       localStorage.setItem('migrationCompleted', '2.0.0');
-
-      console.log('Migration completed');
       
       // Reload the page to show migrated data
       window.location.reload();

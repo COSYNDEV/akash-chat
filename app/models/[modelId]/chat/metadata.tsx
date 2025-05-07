@@ -1,4 +1,5 @@
 import { Metadata } from 'next';
+
 import { models } from '@/app/config/models';
 
 export async function generateMetadata(props: {

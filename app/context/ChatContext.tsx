@@ -1,18 +1,21 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useChat } from 'ai/react';
 import type { Message as AIMessage } from 'ai';
+import { useChat } from 'ai/react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useWindowSize } from 'usehooks-ts';
-import { models as defaultModels, defaultModel, Model } from '@/app/config/models';
-import { useChatHistory } from '@/hooks/use-chat-history';
-import { useFolders } from '@/hooks/use-folders';
+
 import { DEFAULT_SYSTEM_PROMPT } from '@/app/config/api';
+import { CACHE_TTL } from '@/app/config/api';
+import { models as defaultModels, defaultModel, Model } from '@/app/config/models';
+import { ChatHistory } from '@/components/chat/chat-sidebar';
+import { useChatHistory } from '@/hooks/use-chat-history';
+import { Folder, useFolders } from '@/hooks/use-folders';
 import { getAccessToken, storeAccessToken, processMessages } from '@/lib/utils';
 
 const SELECTED_MODEL_KEY = 'selectedModel';
 
-interface ContextFile {
+export interface ContextFile {
   id: string;
   name: string;
   content: string;
@@ -67,12 +70,12 @@ interface ChatContextType {
   // Chat management
   selectedChat: string | null;
   setSelectedChat: (chatId: string | null) => void;
-  chats: any[];
+  chats: ChatHistory[];
   handleNewChat: () => void;
   handleChatSelect: (chatId: string) => void;
   handleMessagesSelect: (messages: AIMessage[]) => void;
-  saveChat: (messages: AIMessage[], model: any, system: string) => string;
-  updateChat: (chatId: string, messages: AIMessage[], model?: any) => void;
+  saveChat: (messages: AIMessage[], model: Model, system: string) => string;
+  updateChat: (chatId: string, messages: AIMessage[], model?: Model) => void;
   deleteChat: (chatId: string) => void;
   renameChat: (chatId: string, newName: string) => void;
   moveToFolder: (chatId: string, folderId: string | null) => void;
@@ -82,7 +85,7 @@ interface ChatContextType {
   handleBranch: (messageIndex: number) => void;
   
   // Folder management
-  folders: any[];
+  folders: Folder[];
   createFolder: (name: string) => string;
   updateFolder: (folderId: string, name: string) => void;
   deleteFolder: (folderId: string) => void;
@@ -142,7 +145,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setInput,
     reload,
     stop,
-    error,
   } = useChat({
     api: '/api/chat',
     body: {
@@ -150,13 +152,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       system: systemPrompt,
       temperature,
       topP,
-      context: contextFiles.map(f => ({ 
+      context: contextFiles.map((f: ContextFile) => ({ 
         content: f.content,
         name: f.name,
         type: f.type,
       })),
     },
-    onFinish: (message) => {
+    onFinish: (message: AIMessage) => {
       setModelError(null);
       if (!selectedChat) {
         const chatId = saveChat([...messages, message], {
@@ -166,7 +168,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSelectedChat(chatId);
       }
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       setModelError(error.message);
       console.error('Chat error:', error);
     },
@@ -183,7 +185,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const init = async () => {
       try {
-        const statusResponse = await fetch('/api/auth/status');
+        const statusResponse = await fetch('/api/auth/status/');
         if (statusResponse.ok) {
           const { requiresAccessToken } = await statusResponse.json();
 
@@ -196,7 +198,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         const accessToken = getAccessToken();
-        const response = await fetch('/api/auth/session', accessToken ? {
+        const response = await fetch('/api/auth/session/', accessToken ? {
           headers: {
             'Authorization': `Bearer ${accessToken}`
           }
@@ -219,14 +221,68 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     init();
   }, []);
 
+  useEffect(() => {
+    if (!sessionInitialized) {return;}
+
+    // Refresh token every 20% of the cache TTL on visibility change
+    let lastRefreshTime = 0;
+    const MIN_REFRESH_INTERVAL = CACHE_TTL * 0.2 * 1000;
+
+    const refreshToken = async () => {
+      try {
+        const response = await fetch('/api/auth/session/refresh/', {
+          method: 'POST',
+          credentials: 'include',
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            const newSessionResponse = await fetch('/api/auth/session/');
+            if (newSessionResponse.ok) {
+              return;
+            }
+          }
+          throw new Error('Failed to refresh session');
+        }
+      } catch (error) {
+        console.error('Failed to refresh session:', error);
+      }
+    };
+
+    // Refresh token when 50% of the TTL has passed
+    const refreshInterval = CACHE_TTL * 0.5 * 1000;
+    const intervalId = setInterval(refreshToken, refreshInterval);
+
+    // Add visibility change listener with debounce
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const now = Date.now();
+        if (now - lastRefreshTime >= MIN_REFRESH_INTERVAL) {
+          lastRefreshTime = now;
+          refreshToken();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Initial refresh
+    refreshToken();
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [sessionInitialized]);
+
   // fetch models once on initialization
   useEffect(() => {
-    if (!sessionInitialized) return;
+    if (!sessionInitialized) {return;}
     
     const fetchModels = async () => {
       try {
         setIsLoadingModels(true);
-        const response = await fetch('/api/models');
+        const response = await fetch('/api/models/');
         if (!response.ok) {
           throw new Error('Failed to fetch models');
         }
@@ -261,7 +317,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [sessionInitialized]);
 
   useEffect(() => {
-    const model = availableModels.find(m => m.id === modelSelection);
+    const model = availableModels.find((m: Model) => m.id === modelSelection);
     if (model) {
       setTemperature(model.temperature || 0.7);
       setTopP(model.top_p || 0.95);
@@ -281,7 +337,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await storeAccessToken(accessTokenInput.trim());
 
         // Try to validate the token with the server
-        const response = await fetch('/api/auth/session', {
+        const response = await fetch('/api/auth/session/', {
           headers: {
             'Authorization': `Bearer ${getAccessToken()}`
           }
@@ -316,8 +372,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const handleChatSelect = (chatId: string) => {
-    if (isLoading) return;
-    const chat = chats.find(c => c.id === chatId);
+    if (isLoading) {return;}
+    const chat = chats.find((c: { id: string; }) => c.id === chatId);
     if (chat) {
       setSelectedChat(chatId);
       setModelSelection(chat.model.id);
@@ -334,18 +390,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // If there's a selected chat, update the model information before submitting
     if (selectedChat) {
-      const currentChat = chats.find(chat => chat.id === selectedChat);
+      const currentChat = chats.find((chat: { id: string; }) => chat.id === selectedChat);
       if (currentChat && currentChat.model.id !== modelSelection) {
         // Update the existing chat with the new model
         updateChat(selectedChat, messages, {
           id: modelSelection,
-          name: availableModels.find(m => m.id === modelSelection)?.name || modelSelection,
+          name: availableModels.find((m: Model) => m.id === modelSelection)?.name || modelSelection,
         });
       }
     }
 
     // Check if the model is available
-    const model = availableModels.find(m => m.id === modelSelection);
+    const model = availableModels.find((m: Model) => m.id === modelSelection);
     if (!model || !model.available) {
       setModelError('Model is not available. Please select a different model.');
       return;
@@ -363,10 +419,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Handle branching from a specific message
   const handleBranch = (messageIndex: number) => {
-    if (!selectedChat || isLoading) return;
+    if (!selectedChat || isLoading) {return;}
 
-    const sourceChat = chats.find(chat => chat.id === selectedChat);
-    if (!sourceChat) return;
+    const sourceChat = chats.find((chat: { id: string; }) => chat.id === selectedChat);
+    if (!sourceChat) {return;}
     
     const branchedChatId = branchChat(selectedChat, messageIndex);
     

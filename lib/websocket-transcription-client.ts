@@ -2,6 +2,7 @@ interface WebSocketOptions {
   wsUrl?: string;
   model?: string;
   onTranscript?: (text: string) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onError?: (error: any) => void;
   onClose?: () => void;
   onReady?: () => void;
@@ -38,7 +39,7 @@ export class WebSocketTranscriptionClient {
    * Connect to the Audio Transcriptions API via WebSocket
    */
   public async connect(): Promise<void> {
-    if (this.isConnected) return;
+    if (this.isConnected) {return;}
     try {
       // Get WebSocket URL if not provided
       if (!this.options.wsUrl) {
@@ -200,7 +201,7 @@ export class WebSocketTranscriptionClient {
       throw new Error("Not connected to server. Call connect() first.");
     }
 
-    if (this.isRecording) return;
+    if (this.isRecording) {return;}
 
     try {
       // Quick permission check
@@ -210,7 +211,7 @@ export class WebSocketTranscriptionClient {
       if (permissionStatus?.state === 'denied') {
         throw new Error("Microphone access has been denied. Please grant permission in your browser settings.");
       }
-      
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const browserSampleRate = this.audioContext.sampleRate;
       const targetSampleRate = 16000;
@@ -224,6 +225,7 @@ export class WebSocketTranscriptionClient {
             channelCount: 1
           } 
         });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (micError: any) {
         if (micError.name === 'NotAllowedError' || micError.name === 'PermissionDeniedError') {
           throw new Error("Microphone access was denied. Please allow microphone access in your browser settings.");
@@ -241,7 +243,7 @@ export class WebSocketTranscriptionClient {
       this.processor.connect(this.audioContext.destination);
       
       this.processor.onaudioprocess = (e) => {
-        if (!this.isRecording || !this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+        if (!this.isRecording || !this.socket || this.socket.readyState !== WebSocket.OPEN) {return;}
         
         const inputData = e.inputBuffer.getChannelData(0);
         
@@ -313,7 +315,7 @@ export class WebSocketTranscriptionClient {
    * Stop recording audio
    */
   public stopRecording(): void {
-    if (!this.isRecording) return;
+    if (!this.isRecording) {return;}
     this.isRecording = false;
     this.cleanupAudioResources();
   }
@@ -346,7 +348,9 @@ export class WebSocketTranscriptionClient {
     if (this.processor) {
       try {
         this.processor.disconnect();
-      } catch (error) {}
+      } catch (error) {
+        console.error("Error disconnecting processor:", error);
+      }
       this.processor = null;
     }
     
@@ -354,7 +358,9 @@ export class WebSocketTranscriptionClient {
     if (this.audioSource) {
       try {
         this.audioSource.disconnect();
-      } catch (error) {}
+      } catch (error) {
+        console.error("Error disconnecting audio source:", error);
+      }
       this.audioSource = null;
     }
     
@@ -362,7 +368,9 @@ export class WebSocketTranscriptionClient {
     if (this.mediaStream) {
       try {
         this.mediaStream.getTracks().forEach(track => track.stop());
-      } catch (error) {}
+      } catch (error) {
+        console.error("Error stopping media tracks:", error);
+      }
       this.mediaStream = null;
     }
     
@@ -370,7 +378,9 @@ export class WebSocketTranscriptionClient {
     if (this.audioContext) {
       try {
         this.audioContext.close();
-      } catch (error) {}
+      } catch (error) {
+        console.error("Error closing audio context:", error);
+      }
       this.audioContext = null;
     }
   }
@@ -380,7 +390,7 @@ export class WebSocketTranscriptionClient {
    * This helps prevent nonsensical phrases caused by missing words
    */
   private applyContextualFiltering(words: TranscriptionWord[]): TranscriptionWord[] {
-    if (words.length <= 1) return words;
+    if (words.length <= 1) {return words;}
     
     const result: TranscriptionWord[] = [];
     let currentPhrase: TranscriptionWord[] = [];
@@ -420,7 +430,7 @@ export class WebSocketTranscriptionClient {
   private async getWebSocketInfos(): Promise<{ url: string, model: string } | null> {
     try {
       if (typeof window !== 'undefined') {
-        const response = await fetch('/api/transcription');
+        const response = await fetch('/api/transcription/');
         if (!response.ok) {
           throw new Error('Failed to fetch WebSocket endpoint');
         }

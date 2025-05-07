@@ -1,7 +1,8 @@
 import { Metadata } from 'next';
+import { notFound } from 'next/navigation';
+
 import { models } from '@/app/config/models';
 import { ModelDetailClient } from '@/components/models/model-detail-client';
-import { notFound } from 'next/navigation';
 
 // This function will be executed at build time for static pages
 // and at request time for dynamic pages

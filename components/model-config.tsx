@@ -1,11 +1,12 @@
 'use client';
 
+import { Plus, Save, Trash2, RotateCcw } from "lucide-react";
+import { useEffect, useState } from "react";
+
+import { models } from "@/app/config/models";
+import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import { useEffect, useState } from "react";
-import { Plus, Save, Trash2, RotateCcw } from "lucide-react";
-import { models } from "@/app/config/models";
 import { trackEvent } from '@/lib/analytics';
 
 interface ModelConfigProps {
@@ -78,7 +79,7 @@ export function ModelConfig({
   };
 
   const savePrompt = () => {
-    if (!promptName.trim()) return;
+    if (!promptName.trim()) {return;}
     
     const newPrompt: SavedPrompt = {
       name: promptName,

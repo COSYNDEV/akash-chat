@@ -1,4 +1,5 @@
 import { MetadataRoute } from 'next'
+
 import { models, defaultModel } from '@/app/config/models'
 
 export default function sitemap(): MetadataRoute.Sitemap {

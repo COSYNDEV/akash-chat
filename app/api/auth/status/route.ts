@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+
 import { ACCESS_TOKEN } from '@/app/config/api';
 
 /**

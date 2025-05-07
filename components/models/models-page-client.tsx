@@ -1,12 +1,13 @@
 'use client';
 
-import { useChatContext } from "@/app/context/ChatContext";
-import { AlertCircle, Gauge, Info, Layers, Settings } from "lucide-react";
 import { motion } from "framer-motion";
-import { cn } from "@/lib/utils";
-import { Model } from "@/app/config/models";
+import { AlertCircle, Gauge, Info, Layers, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
+
+import { Model } from "@/app/config/models";
+import { useChatContext } from "@/app/context/ChatContext";
+import { cn } from "@/lib/utils";
+
 import { ModelThumbnail } from "../branding/model-thumbnail";
 export function ModelsPageClient() {
     const {
@@ -17,7 +18,7 @@ export function ModelsPageClient() {
     const router = useRouter();
 
     const handleModelClick = (model: Model) => {
-        if (!model.available) return;
+        if (!model.available) {return;}
 
         // Start a chat with this model
         setModelSelection(model.id);

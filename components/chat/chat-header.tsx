@@ -1,12 +1,12 @@
 'use client';
 
-import { AkashChatLogo } from '@/components/branding/akash-chat-logo';
-import { PanelRightClose, PanelRightOpen, LoaderCircle, Package } from 'lucide-react';
-import { Model } from '@/app/config/models';
-import { cn } from '@/lib/utils';
-import { ThemeToggle } from '@/components/theme-toggle';
+import { PanelRightClose, PanelRightOpen, LoaderCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
+
+import { Model } from '@/app/config/models';
+import { AkashChatLogo } from '@/components/branding/akash-chat-logo';
+import { ThemeToggle } from '@/components/theme-toggle';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,6 +14,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from '@/lib/utils';
 
 interface ChatHeaderProps {
   modelSelection: string;
@@ -38,7 +39,6 @@ export function ChatHeader({
   // Check if we're on a model detail page
   const isModelDetailPage = pathname && pathname.startsWith('/models/') && !pathname.endsWith('/chat/');
   const isChatPage = pathname && pathname.startsWith('/models/') && pathname.endsWith('/chat/');
-
   
   // Handle model selection with optional redirection
   const handleModelChange = (newModelId: string) => {

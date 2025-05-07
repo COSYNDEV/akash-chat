@@ -1,6 +1,7 @@
 import { Metadata, ResolvingMetadata } from 'next';
-import { models } from '@/app/config/models';
 import { use } from 'react';
+
+import { models } from '@/app/config/models';
 
 // Dynamic metadata generation
 export async function generateMetadata(
@@ -23,11 +24,9 @@ export async function generateMetadata(
 
   // Format model capabilities for description
   const capabilities = [];
-  if (model.tokenLimit) capabilities.push(`${(model.tokenLimit / 1000).toFixed(0)}K context window`);
+  if (model.tokenLimit) {capabilities.push(`${(model.tokenLimit / 1000).toFixed(0)}K context window`);}
   
   const modelFamily = model.id.split('-')[0];
-      // todo: change this to a more accurate description
-
   const detailedDescription = model.description 
     ? `${model.description}${capabilities.length ? '. ' : ''}`
     : '';

@@ -1,7 +1,8 @@
-import { useDrop } from 'react-dnd';
-import { cn } from '@/lib/utils';
-import { useState, useRef } from 'react';
 import { ChevronRight } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { useDrop } from 'react-dnd';
+
+import { cn } from '@/lib/utils';
 
 interface DroppableFolderProps {
   id: string;
