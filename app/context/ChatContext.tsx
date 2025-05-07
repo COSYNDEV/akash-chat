@@ -249,8 +249,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
 
-    // Refresh token when 80% of the TTL has passed
-    const refreshInterval = CACHE_TTL * 0.8 * 1000;
+    // Refresh token when 50% of the TTL has passed
+    const refreshInterval = CACHE_TTL * 0.5 * 1000;
     const intervalId = setInterval(refreshToken, refreshInterval);
 
     // Add visibility change listener with debounce
