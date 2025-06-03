@@ -14,6 +14,7 @@ import { Folder, useFolders } from '@/hooks/use-folders';
 import { getAccessToken, storeAccessToken, processMessages } from '@/lib/utils';
 
 const SELECTED_MODEL_KEY = 'selectedModel';
+const CURRENT_SYSTEM_PROMPT_KEY = 'currentSystemPrompt';
 
 export interface ContextFile {
   id: string;
@@ -112,13 +113,21 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return defaultModel;
   };
   
+  const getSavedSystemPrompt = () => {
+    if (typeof window !== 'undefined') {
+      const savedPrompt = localStorage.getItem(CURRENT_SYSTEM_PROMPT_KEY);
+      return savedPrompt || DEFAULT_SYSTEM_PROMPT;
+    }
+    return DEFAULT_SYSTEM_PROMPT;
+  };
+  
   const [modelSelection, setModelSelection] = useState(getSavedModel);
   const [availableModels, setAvailableModels] = useState<Model[]>(defaultModels);
   const [isLoadingModels, setIsLoadingModels] = useState(true);
   const [modelError, setModelError] = useState<string | null>(null);
   
   // Config state
-  const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
+  const [systemPrompt, setSystemPrompt] = useState(getSavedSystemPrompt);
   const [temperature, setTemperature] = useState(0.7);
   const [topP, setTopP] = useState(0.95);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
@@ -181,6 +190,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(SELECTED_MODEL_KEY, modelSelection);
     }
   }, [modelSelection]);
+
+  // Save system prompt to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined' && systemPrompt !== undefined) {
+      localStorage.setItem(CURRENT_SYSTEM_PROMPT_KEY, systemPrompt);
+    }
+  }, [systemPrompt]);
 
   // Effect hooks
   useEffect(() => {
