@@ -63,6 +63,7 @@ interface ChatContextType {
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement> | React.ChangeEvent<HTMLTextAreaElement>) => void;
   handleSubmit: (e: React.FormEvent<HTMLFormElement>) => Promise<void>;
   isLoading: boolean;
+  status: 'submitted' | 'streaming' | 'ready' | 'error';
   contextFiles: ContextFile[];
   setContextFiles: (files: ContextFile[]) => void;
   reload: () => void;
@@ -150,13 +151,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     handleInputChange,
     handleSubmit: originalHandleSubmit,
     isLoading,
+    status,
     setMessages,
     setInput,
     reload,
     stop,
   } = useChat({
     api: '/api/chat',
-    experimental_throttle: 150,
+    experimental_throttle: 250,
     body: {
       model: modelSelection,
       system: systemPrompt,
@@ -345,7 +347,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (selectedChat && messages.length > 0) {
       updateChat(selectedChat, messages);
     }
-  }, [messages, selectedChat]);
+  }, [messages, selectedChat, updateChat]);
 
   // Handle access token submission
   const handleAccessTokenSubmit = async () => {
@@ -496,6 +498,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     handleInputChange,
     handleSubmit: handleChatSubmit,
     isLoading,
+    status,
     contextFiles,
     setContextFiles,
     reload,
