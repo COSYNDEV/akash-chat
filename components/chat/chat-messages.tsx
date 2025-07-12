@@ -9,6 +9,7 @@ import { ContextFile } from '@/app/context/ChatContext';
 import { AkashChatLogo } from '@/components/branding/akash-chat-logo';
 import { ChatInput } from '@/components/chat/chat-input';
 import { Message } from '@/components/message';
+import { useRateLimit } from '@/hooks/use-rate-limit';
 
 interface ChatMessagesProps {
   messages: AIMessage[];
@@ -27,6 +28,8 @@ interface ChatMessagesProps {
   sessionInitialized: boolean;
   showStopButton?: boolean;
   setMessages: (messages: AIMessage[]) => void;
+  isPrivateMode?: boolean;
+  onPrivateModeToggle?: () => void;
 }
 
 export function ChatMessages({
@@ -45,11 +48,14 @@ export function ChatMessages({
   handleBranch,
   sessionInitialized,
   showStopButton = false,
-  setMessages
+  setMessages,
+  isPrivateMode = false,
+  onPrivateModeToggle
 }: ChatMessagesProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [isLimitReached, setIsLimitReached] = useState(false);
   const { width: windowWidth } = useWindowSize();
   const isMobile = windowWidth ? windowWidth < 768 : false;
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
@@ -191,6 +197,18 @@ export function ChatMessages({
     };
   }, []);
 
+  // Use centralized rate limit hook
+  const { blocked } = useRateLimit();
+  
+  useEffect(() => {
+    setIsLimitReached(blocked);
+  }, [blocked]);
+
+  // Handle limit reached callback from chat input
+  const handleLimitReached = (reached: boolean) => {
+    setIsLimitReached(reached);
+  };
+
   return (
     <>
       <div
@@ -216,6 +234,10 @@ export function ChatMessages({
                   contextFiles={contextFiles}
                   className="relative"
                   isInitialized={sessionInitialized}
+                  isLimitReached={isLimitReached}
+                  onLimitReached={handleLimitReached}
+                  isPrivateMode={isPrivateMode}
+                  onPrivateModeToggle={onPrivateModeToggle}
                 />
               </div>
             </div>
@@ -282,6 +304,10 @@ export function ChatMessages({
             className="max-w-3xl mx-auto"
             showStopButton={showStopButton}
             isInitialized={sessionInitialized}
+            isLimitReached={isLimitReached}
+            onLimitReached={handleLimitReached}
+            isPrivateMode={isPrivateMode}
+            onPrivateModeToggle={onPrivateModeToggle}
           />
           <p className="text-xs text-muted-foreground text-center mt-2">
             {AI_NOTICE}

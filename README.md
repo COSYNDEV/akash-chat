@@ -26,7 +26,7 @@
   - Image status tracking for generation processes
   
 - **Voice Capabilities**:
-  - Real-time voice transcription for hands-free interaction with extra backend
+  - Real-time voice transcription for hands-free interaction
   - Configurable recording time limits (up to 3 minutes)
   
 - **Advanced Chat Functions**:
@@ -61,7 +61,7 @@ AkashChat leverages the decentralized cloud infrastructure of Akash Network, off
 1. Clone the repository:
    ```bash
    git clone https://github.com/akash-network/akash-chat.git
-   cd chat
+   cd akash-chat
    ```
 
 2. Install dependencies:
@@ -93,6 +93,20 @@ AkashChat leverages the decentralized cloud infrastructure of Akash Network, off
    # Voice Transcription Configuration
    WS_TRANSCRIPTION_URLS=your_websocket_urls_here
    WS_TRANSCRIPTION_MODEL=your_transcription_model_here
+   
+   # Authentication Configuration (Optional - for user accounts)
+   AUTH0_SECRET=your_auth0_secret_here
+   AUTH0_BASE_URL=your_base_url_here
+   AUTH0_ISSUER_BASE_URL=your_auth0_issuer_url_here
+   AUTH0_CLIENT_ID=your_auth0_client_id_here
+   AUTH0_CLIENT_SECRET=your_auth0_client_secret_here
+   
+   # Database Configuration 
+   DATABASE_URL=postgresql://username:password@localhost:5432/database_name
+   
+   # LiteLLM Integration (Optional)
+   LITELLM_BASE_URL=your_litellm_base_url_here
+   LITELLM_API_KEY=your_litellm_api_key_here
    ```
 
 4. Start the development server:
@@ -115,6 +129,14 @@ AkashChat leverages the decentralized cloud infrastructure of Akash Network, off
 | IMG_API_KEY | Authentication key for AkashGen image generation | No | - |
 | IMG_ENDPOINT | Endpoint for AkashGen image generation | No | - |
 | IMG_GEN_FN_MODEL | Model for AkashGen image generation | No | - |
+| AUTH0_SECRET | Auth0 session secret for user authentication | No | - |
+| AUTH0_BASE_URL | Base URL for Auth0 configuration | No | - |
+| AUTH0_ISSUER_BASE_URL | Auth0 issuer base URL | No | - |
+| AUTH0_CLIENT_ID | Auth0 application client ID | No | - |
+| AUTH0_CLIENT_SECRET | Auth0 application client secret | No | - |
+| DATABASE_URL | PostgreSQL connection URL for data persistence | Yes | - |
+| LITELLM_BASE_URL | LiteLLM proxy base URL | No | - |
+| LITELLM_API_KEY | LiteLLM proxy API key | No | - |
 
 ## Deployment on Akash Network
 

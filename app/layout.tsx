@@ -1,9 +1,11 @@
 import './globals.css';
 
-import { GoogleAnalytics } from '@next/third-parties/google';
+import { UserProvider } from '@auth0/nextjs-auth0/client';
 import { Inter } from 'next/font/google';
 import { ThemeProvider } from 'next-themes';
 
+import { ConditionalAnalytics } from '@/components/analytics';
+import { CookieBanner } from '@/components/cookie-banner';
 import { ThemeScript } from '@/components/theme-script';
 
 import { ChatProvider } from './context/ChatContext';
@@ -107,28 +109,31 @@ export default function RootLayout({
           storageKey="theme"
           enableColorScheme={true}
         >
-          <ChatProvider>
-            {/* App-wide structured data */}
-            <div 
-              itemScope 
-              itemType="https://schema.org/WebApplication"
-              style={{ display: 'none' }}
-            >
-              <meta itemProp="name" content="AkashChat" />
-              <meta itemProp="description" content="Chat with the leading open source AI models, powered by the Akash Supercloud." />
-              <meta itemProp="url" content="https://chat.akash.network" />
-              <meta itemProp="applicationCategory" content="Artificial Intelligence" />
-              <meta itemProp="operatingSystem" content="Any" />
-              
-              <div itemProp="author" itemScope itemType="https://schema.org/Organization">
-                <meta itemProp="name" content="Akash Network" />
-                <meta itemProp="url" content="https://akash.network" />
+          <UserProvider>
+            <ChatProvider>
+              {/* App-wide structured data */}
+              <div 
+                itemScope 
+                itemType="https://schema.org/WebApplication"
+                style={{ display: 'none' }}
+              >
+                <meta itemProp="name" content="AkashChat" />
+                <meta itemProp="description" content="Chat with the leading open source AI models, powered by the Akash Supercloud." />
+                <meta itemProp="url" content="https://chat.akash.network" />
+                <meta itemProp="applicationCategory" content="Artificial Intelligence" />
+                <meta itemProp="operatingSystem" content="Any" />
+                
+                <div itemProp="author" itemScope itemType="https://schema.org/Organization">
+                  <meta itemProp="name" content="Akash Network" />
+                  <meta itemProp="url" content="https://akash.network" />
+                </div>
               </div>
-            </div>
-            
-            {children}
-          </ChatProvider>
-          <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID ?? ''} />
+              
+              {children}
+              <CookieBanner />
+            </ChatProvider>
+          </UserProvider>
+          <ConditionalAnalytics />
         </ThemeProvider>
       </body>
     </html>

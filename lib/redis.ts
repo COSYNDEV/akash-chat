@@ -60,4 +60,38 @@ export async function deleteSession(sessionToken: string) {
   await redis.del(`session:${sessionToken}`);
 }
 
+// LiteLLM API key session management
+export async function getUserLiteLLMKey(userId: string): Promise<string | null> {
+  try {
+    const key = `litellm:api_key:${userId}`;
+    const data = await redis.get(key);
+    
+    if (!data) {return null;}
+
+    const keyData = JSON.parse(data);
+    
+    // Check if expired
+    if (Date.now() > keyData.expiresAt) {
+      await redis.del(key);
+      return null;
+    }
+
+    return keyData.key;
+  } catch (error) {
+    console.error('Failed to get LiteLLM API key from Redis:', error);
+    return null;
+  }
+}
+
+export async function storeLiteLLMKey(userId: string, apiKey: string, expiryInSeconds: number = 24 * 60 * 60): Promise<void> {
+  const keyData = {
+    key: apiKey,
+    userId,
+    expiresAt: Date.now() + (expiryInSeconds * 1000)
+  };
+
+  const redisKey = `litellm:api_key:${userId}`;
+  await redis.set(redisKey, JSON.stringify(keyData), 'EX', expiryInSeconds);
+}
+
 export default redis; 

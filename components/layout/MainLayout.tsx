@@ -2,19 +2,24 @@
 
 import { Message as AIMessage } from 'ai';
 import { AlertCircle, LoaderCircle } from 'lucide-react';
+import { useRouter, usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useSwipeable } from 'react-swipeable';
 import { useWindowSize } from 'usehooks-ts';
 
 import { Model } from '@/app/config/models';
+import { useChatContext } from '@/app/context/ChatContext';
 import { AkashChatLogo } from '@/components/branding/akash-chat-logo';
 import { ChatHeader } from '@/components/chat/chat-header';
 import { ChatHistory, ChatSidebar } from '@/components/chat/chat-sidebar';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { KeyboardShortcutsModal } from "@/components/ui/keyboard-shortcuts-modal";
 import { Folder } from '@/hooks/use-folders';
+import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { cn } from '@/lib/utils';
 
 interface MainLayoutProps {
@@ -34,7 +39,7 @@ interface MainLayoutProps {
   renameChat: (chatId: string, newName: string) => void;
   moveToFolder: (chatId: string, folderId: string | null) => void;
   folders: Folder[];
-  createFolder: (name: string) => void;
+  createFolder: (name: string) => Promise<string>;
   updateFolder: (folderId: string, name: string) => void;
   deleteFolder: (folderId: string) => void;
   isLoading: boolean;
@@ -48,6 +53,21 @@ interface MainLayoutProps {
   setAccessTokenInput: (token: string) => void;
   handleAccessTokenSubmit: () => Promise<void>;
   modelError?: string | null;
+  // Additional props for keyboard shortcuts
+  messages?: AIMessage[];
+  stop?: () => void;
+  reload?: () => void;
+  isRecording?: boolean;
+  toggleVoiceRecording?: () => void;
+  contextFiles?: any[];
+  setContextFiles?: (files: any[]) => void;
+  forceUpdateCounter?: number;
+  syncProgress?: {
+    stage: 'checking' | 'loading' | 'merging' | 'syncing' | 'complete';
+    message: string;
+    percentage: number;
+  };
+  user?: any;
 }
 
 export function MainLayout({
@@ -80,10 +100,90 @@ export function MainLayout({
   accessTokenInput,
   setAccessTokenInput,
   handleAccessTokenSubmit,
-  modelError
+  modelError,
+  messages,
+  stop,
+  reload,
+  isRecording,
+  toggleVoiceRecording: _toggleVoiceRecording,
+  contextFiles: _contextFiles,
+  setContextFiles,
+  forceUpdateCounter = 0,
+  syncProgress,
+  user
 }: MainLayoutProps) {
+  // State to track when loading should end (with delay)
+  const [shouldShowLoader, setShouldShowLoader] = useState(true);
+
   const { width: windowWidth } = useWindowSize();
   const isMobile = windowWidth ? windowWidth < 768 : false;
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // Get sync status from ChatContext
+  const { syncStatus } = useChatContext();
+
+  // Onboarding enforcement
+  useEffect(() => {
+    const checkOnboarding = async () => {
+      // If not logged in, no need to check onboarding
+      if (!user) {return;}
+
+      // If already on profile page, don't redirect
+      if (pathname === '/profile') {return;}
+
+      // Check email verification
+      const isEmailVerified = user.email_verified || user.emailVerified;
+      
+      if (!isEmailVerified) {
+        router.replace('/profile');
+        return;
+      }
+
+      // Check marketing consent from user preferences
+      try {
+        const res = await fetch('/api/user/verification-status', {
+          method: 'GET',
+          credentials: 'include',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (!data.marketingConsent) {
+            router.replace('/profile');
+            return;
+          }
+        } else {
+          // If API fails, redirect to profile to be safe
+          router.replace('/profile');
+          return;
+        }
+      } catch (error) {
+        // If API fails, redirect to profile to be safe
+        router.replace('/profile');
+        return;
+      }
+    };
+
+    checkOnboarding();
+  }, [user, pathname, router]);
+
+  // Determine if loading conditions are met
+  const isLoadingConditions = !sessionInitialized || isLoadingModels || (user && syncStatus !== 'idle' && syncStatus !== 'complete' && syncStatus !== 'error');
+
+  // Handle loading state with delay
+  useEffect(() => {
+    if (isLoadingConditions) {
+      // Show loader immediately when loading starts
+      setShouldShowLoader(true);
+    } else {
+      // Delay hiding the loader by 500ms
+      const timeoutId = setTimeout(() => {
+        setShouldShowLoader(false);
+      }, 500);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isLoadingConditions]);
 
   // Swipe hook
   const swipeHandlers = useSwipeable({
@@ -101,8 +201,145 @@ export function MainLayout({
     delta: 100,
   });
 
-  // Show loading screen while initializing
-  if (!sessionInitialized || isLoadingModels) {
+  // Helper functions for keyboard shortcuts
+  const selectNextChat = () => {
+    if (!chats.length || isLoading) {return;}
+    const currentIndex = chats.findIndex(chat => chat.id === selectedChat);
+    const nextIndex = currentIndex < chats.length - 1 ? currentIndex + 1 : 0;
+    const nextChat = chats[nextIndex];
+    if (nextChat) {
+      // setSelectedChat is actually handleChatSelect from context, which properly manages private mode
+      setSelectedChat(nextChat.id);
+      handleMessagesSelect(nextChat.messages);
+    }
+  };
+
+  const selectPreviousChat = () => {
+    if (!chats.length || isLoading) {return;}
+    const currentIndex = chats.findIndex(chat => chat.id === selectedChat);
+    const prevIndex = currentIndex > 0 ? currentIndex - 1 : chats.length - 1;
+    const prevChat = chats[prevIndex];
+    if (prevChat) {
+      // setSelectedChat is actually handleChatSelect from context, which properly manages private mode
+      setSelectedChat(prevChat.id);
+      handleMessagesSelect(prevChat.messages);
+    }
+  };
+
+  const selectNextModel = () => {
+    if (!availableModels.length || isLoadingModels) {return;}
+    const availableAvailableModels = availableModels.filter(m => m.available);
+    const currentIndex = availableAvailableModels.findIndex(model => model.id === modelSelection);
+    const nextIndex = currentIndex < availableAvailableModels.length - 1 ? currentIndex + 1 : 0;
+    const nextModel = availableAvailableModels[nextIndex];
+    if (nextModel) {
+      setModelSelection(nextModel.id);
+    }
+  };
+
+  const selectPreviousModel = () => {
+    if (!availableModels.length || isLoadingModels) {return;}
+    const availableAvailableModels = availableModels.filter(m => m.available);
+    const currentIndex = availableAvailableModels.findIndex(model => model.id === modelSelection);
+    const prevIndex = currentIndex > 0 ? currentIndex - 1 : availableAvailableModels.length - 1;
+    const prevModel = availableAvailableModels[prevIndex];
+    if (prevModel) {
+      setModelSelection(prevModel.id);
+    }
+  };
+
+  const focusInput = () => {
+    // Try to find and focus the chat input
+    const chatInput = document.querySelector('textarea[placeholder*="Message"]') as HTMLTextAreaElement;
+    if (chatInput) {
+      chatInput.focus();
+    }
+  };
+
+  const addFiles = () => {
+    // Trigger file upload
+    const fileButton = document.querySelector('[aria-label="Add files and photos"]') as HTMLButtonElement;
+    if (fileButton) {
+      fileButton.click();
+    }
+  };
+
+  const clearContext = () => {
+    if (setContextFiles) {
+      setContextFiles([]);
+    }
+  };
+
+  const canRegenerateLastMessage = () => {
+    return messages && messages.length > 0 && messages[messages.length - 1]?.role === 'assistant' && !isLoading;
+  };
+
+  const regenerateLastMessage = () => {
+    if (reload && canRegenerateLastMessage()) {
+      reload();
+    }
+  };
+
+  const triggerImportChats = () => {
+    // Trigger import chats
+    const fileInput = document.querySelector('input[type="file"][accept=".json"]') as HTMLInputElement;
+    if (fileInput) {
+      fileInput.click();
+    }
+  };
+
+  // Keyboard shortcuts configuration
+  const { shortcuts } = useKeyboardShortcuts({
+    newChat: handleNewChat,
+    toggleSidebar: () => setSidebarOpen(!isSidebarOpen),
+    focusInput,
+    sendMessage: () => {
+      // This will be handled by the input component itself
+    },
+    stopGeneration: stop,
+    regenerateLastMessage,
+    selectNextChat,
+    selectPreviousChat,
+    selectNextModel,
+    selectPreviousModel,
+    addFiles,
+    clearContext,
+    createFolder: async () => {
+      // Trigger create folder in sidebar - more specific selector
+      const createFolderButton = Array.from(document.querySelectorAll('button')).find(
+        button => button.textContent?.includes('New Folder')
+      );
+      if (createFolderButton) {
+        createFolderButton.click();
+      } else if (createFolder) {
+        // Fallback: trigger create folder directly
+        const folderName = prompt('Enter folder name:');
+        if (folderName && folderName.trim()) {
+          await createFolder(folderName.trim());
+        }
+      }
+    },
+    exportChats,
+    importChats: triggerImportChats,
+    openSettings: onConfigureModel,
+    jumpToHome: () => router.push('/'),
+    jumpToModels: () => router.push('/models'),
+    toggleVoiceRecording: () => {
+      // Try to trigger voice recording button
+      const voiceButton = document.querySelector('[aria-label*="recording"]') as HTMLButtonElement;
+      if (voiceButton && !voiceButton.disabled) {
+        voiceButton.click();
+      }
+    },
+    isLoading,
+    isRecording,
+    hasMessages: !!(messages && messages.length > 0),
+    isSidebarOpen,
+    canRegenerateLastMessage: canRegenerateLastMessage(),
+  });
+
+  // Show loading screen while initializing (with delay)
+  if (shouldShowLoader) {
     return (
       <div className="fixed inset-0 bg-background/80 backdrop-blur-lg z-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -174,6 +411,32 @@ export function MainLayout({
           <div className="flex flex-col items-center gap-4">
             <AkashChatLogo className="w-48 animate-pulse" />
             <LoaderCircle className="w-6 h-6 animate-spin text-muted-foreground" />
+            <div className="text-sm text-muted-foreground">
+              Initializing secure session...
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Sync loading screen for authenticated users */}
+      {sessionInitialized && user && syncStatus !== 'idle' && syncStatus !== 'complete' && syncStatus !== 'error' && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-lg z-50 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4 max-w-md mx-auto px-6">
+            <AkashChatLogo className="w-48 animate-pulse" />
+            <LoaderCircle className="w-6 h-6 animate-spin text-muted-foreground" />
+            <div className="text-center space-y-2">
+              <div className="text-sm text-muted-foreground">
+                {syncProgress?.message || 'Loading your data...'}
+              </div>
+              {syncProgress?.percentage !== undefined && (
+                <div className="w-full bg-muted rounded-full h-2">
+                  <div 
+                    className="bg-primary h-2 rounded-full transition-all duration-300" 
+                    style={{ width: `${syncProgress.percentage}%` }}
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -200,6 +463,7 @@ export function MainLayout({
               )
             )}>
               <ChatSidebar
+                key={`sidebar-${chats.length}-${forceUpdateCounter}-${syncStatus}-${user?.sub || 'anonymous'}-${chats.map(c => c.id).join('-').slice(0, 50)}`}
                 isSidebarOpen={isSidebarOpen}
                 setSidebarOpen={setSidebarOpen}
                 selectedChat={selectedChat}
@@ -219,6 +483,9 @@ export function MainLayout({
                 onExportChats={exportChats}
                 onImportChats={(file: File) => Promise.resolve(importChats(file))}
                 onConfigureModel={onConfigureModel}
+                shortcuts={shortcuts}
+                user={user}
+                forceUpdateCounter={forceUpdateCounter}
               />
             </div>
 
@@ -233,6 +500,10 @@ export function MainLayout({
           </div>
         </div>
       </DndProvider>
+      
+      {/* Keyboard Shortcuts Modal */}
+      <KeyboardShortcutsModal shortcuts={shortcuts} />
+
     </>
   );
 } 

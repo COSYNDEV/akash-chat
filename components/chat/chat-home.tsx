@@ -37,6 +37,8 @@ export function ChatHome() {
     setContextFiles,
     reload,
     stop,
+    isPrivateMode,
+    setIsPrivateMode,
     
     // Chat management
     selectedChat,
@@ -56,6 +58,11 @@ export function ChatHome() {
     createFolder,
     updateFolder,
     deleteFolder,
+    
+    // Force update counter for sidebar re-renders
+    forceUpdateCounter,
+    syncProgress,
+    user,
     
     // Config state
     systemPrompt,
@@ -96,6 +103,14 @@ export function ChatHome() {
       setAccessTokenInput={setAccessTokenInput}
       handleAccessTokenSubmit={handleAccessTokenSubmit}
       modelError={modelError}
+      messages={messages}
+      stop={stop}
+      reload={reload}
+      contextFiles={contextFiles}
+      setContextFiles={setContextFiles}
+      forceUpdateCounter={forceUpdateCounter}
+      syncProgress={syncProgress}
+      user={user}
     >
       <ChatMessages
         messages={messages}
@@ -114,6 +129,8 @@ export function ChatHome() {
         sessionInitialized={sessionInitialized}
         showStopButton
         setMessages={setMessages}
+        isPrivateMode={isPrivateMode}
+        onPrivateModeToggle={() => setIsPrivateMode(!isPrivateMode)}
       />
 
       <ModelConfig

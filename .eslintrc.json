@@ -1,56 +1,111 @@
 {
-  "extends": [
-    "next/core-web-vitals",
-    "eslint:recommended",
-    "plugin:@typescript-eslint/recommended",
-    "plugin:react/recommended"
-  ],
+  "extends": ["next/core-web-vitals"],
+  "plugins": ["import", "@typescript-eslint"],
   "parser": "@typescript-eslint/parser",
-  "plugins": [
-    "@typescript-eslint",
-    "react",
-    "import"
-  ],
   "rules": {
-    "@typescript-eslint/no-unused-vars": ["error", { 
-      "argsIgnorePattern": "^_|props|node",
-      "varsIgnorePattern": "^_",
-      "ignoreRestSiblings": true
-    }],
-    "@typescript-eslint/no-explicit-any": "error",
-    "@typescript-eslint/consistent-type-definitions": ["error", "interface"],
-    "@typescript-eslint/no-non-null-assertion": "warn",
-    "react/prop-types": "off",
-    "react/react-in-jsx-scope": "off",
-    "react-hooks/rules-of-hooks": "error",
-    "react-hooks/exhaustive-deps": "warn",
-    "react/no-unescaped-entities": "warn",
-    "react/no-unused-prop-types": "warn",
-    "react/jsx-no-duplicate-props": "error",
-    "react/jsx-key": ["error", { "checkFragmentShorthand": true }],
-    "no-console": ["warn", { "allow": ["warn", "error", "info"] }],
-    "prefer-const": "error",
-    "no-var": "error",
-    "no-multiple-empty-lines": ["error", { "max": 1, "maxEOF": 0 }],
+    "no-console": [
+      "warn",
+      {
+        "allow": ["warn", "error", "info"]
+      }
+    ],
+    "prefer-const": ["error"],
+    "no-var": ["error"],
+    "no-multiple-empty-lines": [
+      "error",
+      {
+        "max": 1,
+        "maxEOF": 0
+      }
+    ],
     "eqeqeq": ["error", "always"],
     "curly": ["error", "all"],
-    "no-unused-expressions": "error",
-    "import/no-unresolved": "off",
-    "import/order": ["error", {
-      "groups": ["builtin", "external", "internal", "parent", "sibling", "index"],
-      "newlines-between": "always",
-      "alphabetize": { "order": "asc" }
-    }],
+    "no-unused-expressions": ["error"],
+    "no-unused-vars": "off",
+    "@typescript-eslint/no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_|props|node",
+        "varsIgnorePattern": "^_",
+        "ignoreRestSiblings": true
+      }
+    ],
+    "@typescript-eslint/no-explicit-any": "off",
+    "@typescript-eslint/consistent-type-definitions": ["error", "interface"],
+    "@typescript-eslint/no-non-null-assertion": "warn",
     "@typescript-eslint/ban-types": "warn",
-    "@typescript-eslint/ban-ts-comment": ["warn", { "minimumDescriptionLength": 3 }],
-    "@next/next/no-img-element": "warn",
-    "no-empty": "warn",
+    "@typescript-eslint/ban-ts-comment": [
+      "warn",
+      {
+        "minimumDescriptionLength": 3
+      }
+    ],
     "@typescript-eslint/no-var-requires": "warn",
-    "no-empty-pattern": "warn"
+    "react/prop-types": ["off"],
+    "react/react-in-jsx-scope": ["off"],
+    "react-hooks/rules-of-hooks": ["error"],
+    "react-hooks/exhaustive-deps": ["warn"],
+    "react/no-unescaped-entities": ["warn"],
+    "react/no-unused-prop-types": ["warn"],
+    "react/jsx-no-duplicate-props": ["error"],
+    "react/jsx-key": [
+      "error",
+      {
+        "checkFragmentShorthand": true,
+        "checkKeyMustBeforeSpread": false,
+        "warnOnDuplicates": false
+      }
+    ],
+    "react/display-name": ["error"],
+    "react/jsx-no-target-blank": ["error"],
+    "react/no-children-prop": ["error"],
+    "react/no-danger-with-children": ["error"],
+    "react/no-deprecated": ["error"],
+    "@next/next/no-img-element": ["warn"],
+    "@next/next/no-html-link-for-pages": ["error"],
+    "@next/next/no-sync-scripts": ["error"],
+    "@next/next/google-font-display": ["warn"],
+    "@next/next/google-font-preconnect": ["warn"],
+    "@next/next/next-script-for-ga": ["warn"],
+    "@next/next/no-async-client-component": ["warn"],
+    "@next/next/no-before-interactive-script-outside-document": ["warn"],
+    "@next/next/no-css-tags": ["warn"],
+    "@next/next/no-head-element": ["warn"],
+    "@next/next/no-page-custom-font": ["warn"],
+    "@next/next/no-styled-jsx-in-document": ["warn"],
+    "@next/next/no-title-in-document-head": ["warn"],
+    "@next/next/no-typos": ["warn"],
+    "import/order": [
+      "error",
+      {
+        "groups": [
+          "builtin",
+          "external",
+          "internal",
+          "parent",
+          "sibling",
+          "index"
+        ],
+        "newlines-between": "always",
+        "alphabetize": {
+          "order": "asc",
+          "caseInsensitive": false
+        }
+      }
+    ],
+    "import/no-unresolved": ["off"],
+    "import/no-anonymous-default-export": ["warn"],
+    "no-empty": ["warn"],
+    "no-empty-pattern": ["warn"]
   },
   "settings": {
     "react": {
       "version": "detect"
+    },
+    "import/resolver": {
+      "typescript": {
+        "alwaysTryTypes": true
+      }
     }
   },
   "ignorePatterns": [

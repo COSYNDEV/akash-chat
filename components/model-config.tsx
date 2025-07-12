@@ -1,14 +1,16 @@
 'use client';
 
+import { useUser } from '@auth0/nextjs-auth0/client';
 import { Plus, Save, Trash2, RotateCcw, Sun, Moon, Monitor } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 import { DEFAULT_SYSTEM_PROMPT } from "@/app/config/api";
 import { models } from "@/app/config/models";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { useEncryptedSettings } from '@/hooks/use-encrypted-settings';
 import { trackEvent } from '@/lib/analytics';
 
 interface ModelConfigProps {
@@ -22,8 +24,11 @@ interface ModelConfigProps {
 }
 
 interface SavedPrompt {
+  id?: string;
   name: string;
   content: string;
+  synced?: boolean; // Legacy field for backward compatibility
+  source?: 'local' | 'database'; // New field for consistent tagging
 }
 
 function ThemeToggle() {
@@ -102,23 +107,105 @@ export function ModelConfig({
   onTemperatureChange,
   onTopPChange
 }: ModelConfigProps) {
-  const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]);
   const [promptName, setPromptName] = useState('');
   const [showSaveInput, setShowSaveInput] = useState(false);
   const [selectedPromptName, setSelectedPromptName] = useState<string | null>(null);
+  const [localSavedPrompts, setLocalSavedPrompts] = useState<SavedPrompt[]>([]); // For not-logged-in users
   const maxLength = 1500;
+
+  // Debounced system prompt state
+  const [localSystemPrompt, setLocalSystemPrompt] = useState(systemPrompt);
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Use Auth0 user hook for proper authentication check
+  const { user } = useUser();
+  // Use encrypted settings hook
+  const { 
+    savedPrompts, 
+    savePrompt: saveEncryptedPrompt, 
+    deletePrompt: deleteEncryptedPrompt,
+  } = useEncryptedSettings();
+
+  // Sync localSystemPrompt when systemPrompt prop changes
+  useEffect(() => {
+    setLocalSystemPrompt(systemPrompt);
+    
+    const allPrompts = user?.sub ? savedPrompts : localSavedPrompts;
+    const matchingPrompt = allPrompts.find(prompt => prompt.content === systemPrompt);
+    
+    if (matchingPrompt) {
+      setSelectedPromptName(matchingPrompt.name);
+    } else {
+      setSelectedPromptName(null);
+    }
+  }, [systemPrompt, savedPrompts, localSavedPrompts, user?.sub]);
+
+  // Debounced system prompt change handler
+  const handleSystemPromptChange = (value: string) => {
+    if (value.length <= maxLength) {
+      setLocalSystemPrompt(value);
+      
+      // Clear selection if user manually edits and content no longer matches saved prompts
+      const allPrompts = user?.sub ? savedPrompts : localSavedPrompts;
+      const matchingPrompt = allPrompts.find(prompt => prompt.content === value);
+      
+      if (!matchingPrompt) {
+        setSelectedPromptName(null);
+      }
+      
+      // Clear existing timeout
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+      
+      // Set new timeout to trigger parent change after 500ms of no typing
+      debounceTimeoutRef.current = setTimeout(() => {
+        onSystemPromptChange(value);
+      }, 500);
+    }
+  };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // On mount, always load local prompts (for lazy migration when authenticated)
+  useEffect(() => {
+    const savedPromptsStr = localStorage.getItem('savedSystemPrompts');
+    let localPrompts: SavedPrompt[] = savedPromptsStr ? JSON.parse(savedPromptsStr) : [];
+    
+    // Migrate old prompts to use source tags for backward compatibility
+    let needsUpdate = false;
+    localPrompts = localPrompts.map(prompt => {
+      if (!prompt.source) {
+        needsUpdate = true;
+        // Determine source based on existing data
+        if (prompt.id && prompt.synced === true) {
+          return { ...prompt, source: 'database' };
+        } else {
+          return { ...prompt, source: 'local', synced: false };
+        }
+      }
+      return prompt;
+    });
+    
+    // Update localStorage if migration was needed
+    if (needsUpdate) {
+      localStorage.setItem('savedSystemPrompts', JSON.stringify(localPrompts));
+    }
+    
+    setLocalSavedPrompts(localPrompts);
+  }, [open, user?.sub, savedPrompts]);
 
   // Get current model configuration
   const currentModelConfig = models.find(m => m.id === currentModel);
   const [temperature, setTemperature] = useState(currentModelConfig?.temperature || 0.7);
   const [topP, setTopP] = useState(currentModelConfig?.top_p || 0.95);
-
-  useEffect(() => {
-    const saved = localStorage.getItem('savedSystemPrompts');
-    if (saved) {
-      setSavedPrompts(JSON.parse(saved));
-    }
-  }, []);
 
   // Update temperature and top_p when model changes
   useEffect(() => {
@@ -147,39 +234,122 @@ export function ModelConfig({
     onTopPChange?.(value);
   };
 
-  const savePrompt = () => {
+  const savePrompt = async () => {
     if (!promptName.trim()) {return;}
-    
-    const newPrompt: SavedPrompt = {
-      name: promptName,
-      content: systemPrompt
-    };
-    
-    const updatedPrompts = [...savedPrompts.filter(p => p.name !== promptName), newPrompt];
-    setSavedPrompts(updatedPrompts);
-    localStorage.setItem('savedSystemPrompts', JSON.stringify(updatedPrompts));
-    
+
+    // If not logged in, save to localStorage as local prompt
+    if (!user?.sub) {
+      const savedPromptsStr = localStorage.getItem('savedSystemPrompts');
+      let savedPrompts: SavedPrompt[] = savedPromptsStr ? JSON.parse(savedPromptsStr) : [];
+      // Remove any with the same name
+      savedPrompts = savedPrompts.filter(p => p.name !== promptName);
+      const newPrompt: SavedPrompt = { 
+        name: promptName, 
+        content: localSystemPrompt, 
+        source: 'local',
+        synced: false 
+      };
+      savedPrompts.push(newPrompt);
+      localStorage.setItem('savedSystemPrompts', JSON.stringify(savedPrompts));
+      setLocalSavedPrompts(savedPrompts); // Update local state
+      setPromptName('');
+      setShowSaveInput(false);
+      return;
+    }
+
+    // If logged in, save directly to database
+    try {
+      const savedPrompt = await saveEncryptedPrompt(promptName, localSystemPrompt);
+      
+      // Also add to localStorage as database prompt for consistency
+      const savedPromptsStr = localStorage.getItem('savedSystemPrompts');
+      let savedPrompts: SavedPrompt[] = savedPromptsStr ? JSON.parse(savedPromptsStr) : [];
+      savedPrompts = savedPrompts.filter(p => p.name !== promptName); // Remove any duplicates
+      savedPrompts.push({
+        id: savedPrompt?.id,
+        name: promptName,
+        content: localSystemPrompt,
+        source: 'database',
+        synced: true
+      });
+      localStorage.setItem('savedSystemPrompts', JSON.stringify(savedPrompts));
+      setLocalSavedPrompts(savedPrompts);
+    } catch (error) {
+      console.warn(`Failed to save prompt "${promptName}" to database:`, error);
+      // Don't return here - still clear the form even if save failed
+    }
     setPromptName('');
     setShowSaveInput(false);
   };
 
-  const deletePrompt = (name: string) => {
-    const updatedPrompts = savedPrompts.filter(prompt => prompt.name !== name);
-    setSavedPrompts(updatedPrompts);
-    localStorage.setItem('savedSystemPrompts', JSON.stringify(updatedPrompts));
+  const deletePrompt = async (promptIdOrName: string) => {
+    // If not logged in, delete from localStorage by name
+    if (!user?.sub) {
+      const savedPromptsStr = localStorage.getItem('savedSystemPrompts');
+      let savedPrompts: SavedPrompt[] = savedPromptsStr ? JSON.parse(savedPromptsStr) : [];
+      savedPrompts = savedPrompts.filter(p => p.id !== promptIdOrName);
+      localStorage.setItem('savedSystemPrompts', JSON.stringify(savedPrompts));
+      setLocalSavedPrompts(savedPrompts); // Update local state
+      setSelectedPromptName(null);
+      return;
+    }
+    // If logged in, delete by id
+    await deleteEncryptedPrompt(promptIdOrName);
   };
 
-  const selectPrompt = (prompt: SavedPrompt) => {
+  const selectPrompt = async (prompt: SavedPrompt) => {
     onSystemPromptChange(prompt.content);
     setSelectedPromptName(prompt.name);
     setPromptName(prompt.name);
+    
+    // Lazy migration: If this is a local prompt and user is logged in, sync it to database
+    const isLocalPrompt = prompt.source === 'local' || prompt.synced === false;
+    if (user?.sub && isLocalPrompt) {
+      try {
+        // Save the prompt to database (this automatically handles deduplication and localStorage updates)
+        await saveEncryptedPrompt(prompt.name, prompt.content);
+        
+        // Update local state to reflect the changes made by saveEncryptedPrompt
+        const savedPromptsStr = localStorage.getItem('savedSystemPrompts');
+        if (savedPromptsStr) {
+          const updatedPrompts = JSON.parse(savedPromptsStr);
+          setLocalSavedPrompts(updatedPrompts);
+        }
+      } catch (error) {
+        console.warn(`Failed to migrate prompt "${prompt.name}":`, error);
+        // Silent failure - user can still use the prompt even if migration fails
+      }
+    }
   };
+
+  // Display prompts logic: 
+  // - Not logged in: show localStorage prompts only
+  // - Logged in: show database prompts + localStorage prompts (for lazy migration)
+  const displayPrompts = !user?.sub 
+    ? localSavedPrompts 
+    : (() => {
+        // When logged in, merge database and localStorage prompts with deduplication
+        const dbPrompts = savedPrompts || [];
+        const localPrompts = localSavedPrompts || [];
+        
+        // Create a Set of database prompt names to avoid duplicates
+        const dbPromptNames = new Set(dbPrompts.map(p => p.name));
+        
+        // Filter out localStorage prompts that already exist in database
+        const uniqueLocalPrompts = localPrompts
+          .filter(p => !dbPromptNames.has(p.name))
+          .map(p => ({ ...p, synced: false })); // Mark as unsynced
+        
+        return [...dbPrompts, ...uniqueLocalPrompts];
+      })();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto p-2 sm:p-6 w-[97vw] sm:w-full mx-auto rounded-lg">
         <DialogHeader>
-          <DialogTitle>Configurations</DialogTitle>
+          <DialogTitle>
+            Configurations
+          </DialogTitle>
           <DialogDescription>
             Adjust the model parameters and theme.
           </DialogDescription>
@@ -208,16 +378,12 @@ export function ModelConfig({
                 </Button>
               </div>
               <span className="text-xs text-muted-foreground">
-                {systemPrompt.length}/{maxLength}
+                {localSystemPrompt.length}/{maxLength}
               </span>
             </div>
             <Textarea
-              value={systemPrompt}
-              onChange={(e) => {
-                if (e.target.value.length <= maxLength) {
-                  onSystemPromptChange(e.target.value);
-                }
-              }}
+              value={localSystemPrompt}
+              onChange={(e) => handleSystemPromptChange(e.target.value)}
               placeholder="Enter system prompt..."
               className="min-h-[100px]"
               maxLength={maxLength}
@@ -326,32 +492,49 @@ export function ModelConfig({
           </div>
 
           {/* Saved Prompts Section */}
-          {savedPrompts.length > 0 && (
+          {displayPrompts.length > 0 && (
             <div className="space-y-2">
               <label className="text-sm font-medium">Saved Prompts</label>
               <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                {savedPrompts.map((prompt) => (
-                  <div
-                    key={prompt.name}
-                    className={`flex items-center justify-between p-2 border rounded-md hover:bg-accent ${
-                      selectedPromptName === prompt.name ? 'bg-accent border-primary' : ''
-                    }`}
-                  >
-                    <button
-                      className="flex-1 text-left text-sm"
-                      onClick={() => selectPrompt(prompt)}
+                {displayPrompts.map((prompt) => {
+                  const hasId = typeof (prompt as any).id === 'string';
+                  return (
+                    <div
+                      key={hasId ? (prompt as any).id : prompt.name}
+                      className={`flex items-center justify-between p-2 border rounded-md hover:bg-accent ${
+                        selectedPromptName === prompt.name ? 'bg-accent border-primary' : ''
+                      }`}
                     >
-                      {prompt.name}
-                    </button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => deletePrompt(prompt.name)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
+                      <button
+                        className="flex-1 text-left text-sm flex items-center gap-2"
+                        onClick={() => selectPrompt(prompt)}
+                      >
+                        <span>{prompt.name}</span>
+                        {user?.sub && (prompt.source === 'local' || prompt.synced === false) && (
+                          <span className="text-xs text-muted-foreground bg-orange-100 dark:bg-orange-900 px-1.5 py-0.5 rounded-full">
+                            local
+                          </span>
+                        )}
+                      </button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          const promptId = (prompt as any).id;
+                          if (promptId) {
+                            // For logged in users, delete by ID
+                            deletePrompt(promptId);
+                          } else {
+                            // For not logged in users, delete by name
+                            deletePrompt(prompt.name);
+                          }
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

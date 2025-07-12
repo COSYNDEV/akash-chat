@@ -1,5 +1,7 @@
 import { createOpenAI } from '@ai-sdk/openai';
+import { getSession } from '@auth0/nextjs-auth0';
 import { streamText, createDataStreamResponse, generateText, simulateReadableStream, Message } from 'ai';
+import { NextRequest, NextResponse } from 'next/server';
 import cl100k_base from "tiktoken/encoders/cl100k_base.json";
 import { Tiktoken } from "tiktoken/lite";
 
@@ -7,9 +9,9 @@ import { apiEndpoint, apiKey, imgGenFnModel, DEFAULT_SYSTEM_PROMPT } from '@/app
 import { defaultModel, models } from '@/app/config/models';
 import { withAuth } from '@/lib/auth';
 import { getAvailableModels } from '@/lib/models';
+import { checkRateLimit, incrementRateLimit, getClientIP } from '@/lib/rate-limit';
+import { LiteLLMService } from '@/lib/services/litellm-service';
 import { generateImageTool } from '@/lib/tools';
-// Allow streaming responses up to 30 seconds
-export const maxDuration = 30;
 
 if (!apiKey) {
   throw new Error('API_KEY is not set in environment variables');
@@ -23,7 +25,67 @@ const openai = createOpenAI({
 });
 
 // Define the handler function to be wrapped with authentication
-async function handlePostRequest(req: Request) {
+async function handlePostRequest(req: NextRequest) {
+  // Check Auth0 authentication first
+  const session = await getSession(req, NextResponse.next());
+  const isAuthenticated = !!session?.user;
+  
+  // Get user-specific API key for authenticated users
+  let userApiKey: string | null = null;
+  let openaiClient = openai; // Default to admin client
+  
+  if (isAuthenticated && session?.user?.sub) {
+    userApiKey = await LiteLLMService.getApiKey(session.user.sub);
+    
+    // Create user-specific OpenAI client if user has API key
+    if (userApiKey) {
+      openaiClient = createOpenAI({
+        baseURL: apiEndpoint,
+        apiKey: userApiKey,
+        compatibility: 'compatible'
+      });
+    }
+  }
+  
+  // Check rate limit for unauthenticated users AND authenticated users without API keys
+  const isAccessTokenRequired = process.env.ACCESS_TOKEN && process.env.ACCESS_TOKEN.trim() !== '';
+  let clientIP: string | null = null;
+  
+  const shouldApplyRateLimit = (!isAuthenticated && !isAccessTokenRequired) || 
+                               (isAuthenticated && !userApiKey);
+  
+  if (shouldApplyRateLimit) {
+    clientIP = getClientIP(req);
+    const rateLimit = await checkRateLimit(clientIP);
+    
+    if (rateLimit.blocked) {
+      const message = isAuthenticated 
+        ? `You've reached your limit of ${rateLimit.limit} messages per 2 hours. Please verify your email and accept marketing consent for unlimited access.`
+        : `You've reached your limit of ${rateLimit.limit} messages per 2 hours. Please try again later or sign in for extended access.`;
+        
+      return new Response(
+        JSON.stringify({
+          error: 'Rate limit exceeded',
+          message,
+          limit: rateLimit.limit,
+          used: rateLimit.used,
+          remaining: rateLimit.remaining,
+          resetTime: rateLimit.resetTime.toISOString(),
+          requiresVerification: isAuthenticated, // Flag to indicate user needs verification
+        }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-RateLimit-Limit': rateLimit.limit.toString(),
+            'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+            'X-RateLimit-Reset': Math.ceil(rateLimit.resetTime.getTime() / 1000).toString(),
+          },
+        }
+      );
+    }
+  }
+  
   // Extract the `messages` and `model` from the body of the request
   const body = await req.json();
   const { messages, system, temperature, topP, context } = body;
@@ -47,9 +109,6 @@ async function handlePostRequest(req: Request) {
     for (const file of context) {
       const tokens = encoding.encode(file.content);
       if (tokenCount + tokens.length + 1000 > (selectedModel?.tokenLimit || 128000)) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`Token limit reached: ${tokenCount + tokens.length}`);
-        }
         return new Response('Your files have too much content for this model. Please remove some files or try a different model.', {
           status: 400,
           headers: {
@@ -66,9 +125,6 @@ async function handlePostRequest(req: Request) {
     const tokens = encoding.encode(message.content);
 
     if (tokenCount + tokens.length + 1000 > (selectedModel?.tokenLimit || 128000)) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`Token limit reached: ${tokenCount + tokens.length}`);
-      }
       break;
     }
     tokenCount += tokens.length;
@@ -91,9 +147,9 @@ async function handlePostRequest(req: Request) {
     // Skip the image generation tool if it fails
     try {
       // Send the message to a small model first to determine if it's an image request
-      const smallModel = openai(imgGenFnModel || 'Meta-Llama-3-3-70B-Instruct');
+      const smallModelId = imgGenFnModel || 'Meta-Llama-3-3-70B-Instruct';
       const smallResponse = await generateText({
-        model: smallModel,
+        model: openaiClient(smallModelId),
         messages: messagesToSend.slice(-3),
         system: "Always enhance the user's image request by creating a descriptive image prompt in order to generate a detailed, high-quality image with Stable Diffusion 3.5. Only use the generateImage tool if the user asks for an image. To decide if the user asked for an image, messages but focus on the last one. When asked to generate images, you will use the generateImage tool.",
         tools: {
@@ -106,6 +162,12 @@ async function handlePostRequest(req: Request) {
       // If the small model used the image generation tool, return the result
       if (smallResponse.toolResults.length > 0) {
         const imageResult = smallResponse.toolResults[0].result;
+        
+        // Increment rate limit for successful image generation (unauthenticated users only)
+        if (!isAuthenticated && clientIP) {
+          await incrementRateLimit(clientIP);
+        }
+        
         return new Response(
           simulateReadableStream({
             initialDelayInMs: 0, // Delay before the first chunk
@@ -129,15 +191,30 @@ async function handlePostRequest(req: Request) {
       // If the small model didn't use the image generation tool, use the default model for the rest of the conversation
       model = 'Meta-Llama-3-3-70B-Instruct';
     } catch (error) {
-      console.log('Error generating image');
-      console.error(error);
+      return new Response(
+        JSON.stringify({
+          error: 'Error generating image',
+          message: error instanceof Error ? error.message : String(error),
+        }),
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
     }
   }
 
   return createDataStreamResponse({
-    execute: dataStream => {
+    execute: async dataStream => {
+      // Increment rate limit for successful request start (unauthenticated users and unverified authenticated users)
+      if (shouldApplyRateLimit && clientIP) {
+        await incrementRateLimit(clientIP);
+      }
+      
       const result = streamText({
-        model: openai(model || defaultModel),
+        model: openaiClient(model || defaultModel),
         messages: messagesToSend,
         system: system || DEFAULT_SYSTEM_PROMPT,
         temperature: temperature || selectedModel?.temperature,
@@ -159,10 +236,8 @@ async function handlePostRequest(req: Request) {
             return 'The conversation is too long. Please start a new chat.';
           }
         }
-        console.error(error.message);
         return error.message;
       }
-      console.error(error);
       return String(error);
     }
   });

@@ -1,14 +1,19 @@
-import { Mic, MicOff, LoaderCircle, Paperclip, X, Plus } from 'lucide-react';
+import { useUser } from '@auth0/nextjs-auth0/client';
+import { Mic, MicOff, LoaderCircle, Paperclip, X, Plus, Lock, LockOpen } from 'lucide-react';
 import { useState, useRef, useEffect } from "react";
 
 import { ContextFile } from "@/app/context/ChatContext";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useRateLimit } from '@/hooks/use-rate-limit';
 import { useWebSocketTranscription } from '@/hooks/use-websocket-transcription';
 import { cn } from "@/lib/utils";
 import { handleFileSelect } from '@/utils/file-handler';
 
 import { FileUpload } from '../file-upload';
 import { Button } from "../ui/button";
+
+import { RateLimitMessage } from './rate-limit-message';
 
 interface ChatInputProps {
   input: string;
@@ -21,6 +26,10 @@ interface ChatInputProps {
   onFilesChange?: (files: ContextFile[]) => void;
   contextFiles?: ContextFile[];
   isInitialized?: boolean;
+  isLimitReached?: boolean;
+  onLimitReached?: (reached: boolean) => void;
+  isPrivateMode?: boolean;
+  onPrivateModeToggle?: () => void;
 }
 
 export function ChatInput({
@@ -34,7 +43,17 @@ export function ChatInput({
   onFilesChange,
   contextFiles = [],
   isInitialized = false,
+  isLimitReached = false,
+  onLimitReached,
+  isPrivateMode = false,
+  onPrivateModeToggle,
 }: ChatInputProps) {
+  const { user } = useUser();
+  const isAuthenticated = !!user;
+  
+  // Authenticated users bypass rate limiting
+  const effectiveIsLimitReached = isLimitReached && !isAuthenticated;
+  
   const { isRecording, isConnecting, connectionPossible, startRecording, stopRecording } = useWebSocketTranscription({
     onTranscription: (transcriptionText:string) => {
       let newChatContent = input;
@@ -52,7 +71,7 @@ export function ChatInput({
       
       onChange(event);
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    
     onError: (error: any) => {
       console.error('Transcription error:', error);
     },
@@ -60,11 +79,78 @@ export function ChatInput({
   });
   
   const [showFileUpload, setShowFileUpload] = useState(false);
+  const [limitInfo, setLimitInfo] = useState<{ used: number; limit: number; resetTime: Date } | null>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [previousInput, setPreviousInput] = useState(input);
 
+  // Terms disclaimer acceptance tracking
+  const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const [showRateLimitTooltip, setShowRateLimitTooltip] = useState(false);
+  
+  useEffect(() => {
+    const hasAccepted = localStorage.getItem('akash-chat-terms-accepted');
+    setShowDisclaimer(!hasAccepted);
+  }, []);
+
   const isVoiceFeatureAvailable = isInitialized && connectionPossible === true;
   const isCheckingVoiceAvailability = isInitialized && connectionPossible === null;
+
+  // Calculate live time remaining
+  const getTimeRemaining = () => {
+    if (!limitInfo) {return '...';}
+    
+    const diff = limitInfo.resetTime.getTime() - currentTime.getTime();
+    
+    if (diff <= 0) {
+      return 'now';
+    }
+    
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    } else {
+      return `${seconds}s`;
+    }
+  };
+
+  // Use centralized rate limit hook
+  const { used, limit, resetTime, blocked, checkBeforeSubmit, forceRefresh } = useRateLimit();
+  
+  // Calculate if close to rate limit (within 1 message)
+  const isNearLimit = !user?.sub && used >= limit - 1 && !blocked;
+  
+  useEffect(() => {
+    setLimitInfo({ used, limit, resetTime });
+    if (onLimitReached && blocked !== isLimitReached) {
+      onLimitReached(blocked);
+    }
+  }, [used, limit, resetTime, blocked, onLimitReached, isLimitReached]);
+
+  // Update current time every second when limit is reached for live countdown
+  useEffect(() => {
+    if (isLimitReached && limitInfo) {
+      const interval = setInterval(() => {
+        setCurrentTime(new Date());
+      }, 1000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [isLimitReached, limitInfo]);
+
+  // Clear limit when user becomes authenticated
+  useEffect(() => {
+    if (isAuthenticated && isLimitReached && onLimitReached) {
+      // User just logged in, clear the rate limit
+      onLimitReached(false);
+      setLimitInfo(null);
+    }
+  }, [isAuthenticated, isLimitReached, onLimitReached]);
 
   const handleRemoveFile = (fileId: string) => {
     if (onFilesChange) {
@@ -100,6 +186,47 @@ export function ChatInput({
       textareaRef.current.focus();
     }
   }, []);
+
+  const TermsDisclaimer = () => {
+    if (!showDisclaimer) {
+      return null;
+    }
+
+    const handleAccept = () => {
+      localStorage.setItem('akash-chat-terms-accepted', 'true');
+      setShowDisclaimer(false);
+    };
+
+    return (
+      <div className="text-xs text-muted-foreground text-center mt-2 px-2">
+        By sending messages, you accept our{' '}
+        <a 
+          href="/terms/" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="underline hover:text-foreground transition-colors"
+        >
+          Terms of Service
+        </a>
+        {' '}and{' '}
+        <a 
+          href="/privacy/" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="underline hover:text-foreground transition-colors"
+        >
+          Privacy Notice
+        </a>
+        .{' '}
+        <button
+          onClick={handleAccept}
+          className="underline hover:text-foreground transition-colors ml-2"
+        >
+          Dismiss
+        </button>
+      </div>
+    );
+  };
 
   return (
     <div className={cn("space-y-4", className)}>
@@ -147,77 +274,161 @@ export function ChatInput({
       
       {/* Main chat input container */}
       <div className="relative flex w-full flex-col border border-input rounded-2xl bg-background">
-        {/* Text input area */}
+        {/* Text input area or rate limit message */}
         <div className="px-3 pt-3 pb-2">
-          <form onSubmit={(e) => {
-            if (isRecording) {
-              stopRecording();
-            }
-            onSubmit(e);
-          }}>
-            <Textarea
-              ref={textareaRef}
-              className={cn(
-                "text-primary placeholder:text-muted-foreground block w-full resize-none border-0 bg-transparent px-2 py-0 ring-0 placeholder:ps-px focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 min-h-0 no-select",
-                "scrollbar-thin"
-              )}
-              value={input}
-              placeholder="Message AkashChat"
-              autoFocus
-              onChange={(e) => {
-                if (isRecording && e.target.value !== input) {
-                  stopRecording();
+          {effectiveIsLimitReached ? (
+            <RateLimitMessage getTimeRemaining={getTimeRemaining} />
+          ) : (
+            <>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              
+              if (isRecording) {
+                stopRecording();
+              }
+              
+              // Check rate limit before submitting for anonymous users
+              if (!user?.sub) {
+                const canSubmit = await checkBeforeSubmit();
+                if (!canSubmit) {
+                  // Force refresh to get latest status and trigger UI update
+                  await forceRefresh();
+                  return;
                 }
-                
-                onChange(e);
-                // Adjust height
-                e.target.style.height = 'auto';
-                if (e.target.value.trim() === '') {
-                  // Reset to minimum height when empty
-                  e.target.style.height = '24px';
-                } else {
-                  e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  if (input.trim() && !isLoading) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    onSubmit(e as any);
+              }
+              
+              // Call the original onSubmit
+              onSubmit(e);
+              
+              // Refresh rate limit status after submission for immediate feedback
+              if (!user?.sub) {
+                setTimeout(() => forceRefresh(), 500);
+              }
+            }}>
+              <Textarea
+                ref={textareaRef}
+                className={cn(
+                  "text-primary placeholder:text-muted-foreground block w-full resize-none border-0 bg-transparent px-2 py-0 ring-0 placeholder:ps-px focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 min-h-0 no-select",
+                  "scrollbar-thin"
+                )}
+                value={input}
+                placeholder="Message AkashChat"
+                autoFocus={true}
+                onChange={(e) => {
+                  if (isRecording && e.target.value !== input) {
+                    stopRecording();
                   }
-                }
-              }}
-              rows={1}
-              style={{
-                lineHeight: '1.5rem',
-                maxHeight: '120px',
-                overflowY: 'auto'
-              }}
-            />
-          </form>
+                  
+                  onChange(e);
+                  // Adjust height
+                  e.target.style.height = 'auto';
+                  if (e.target.value.trim() === '') {
+                    // Reset to minimum height when empty
+                    e.target.style.height = '24px';
+                  } else {
+                    e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+                  }
+                }}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (input.trim() && !isLoading) {
+                      // Check rate limit before submitting for anonymous users
+                      if (!user?.sub) {
+                        const canSubmit = await checkBeforeSubmit();
+                        if (!canSubmit) {
+                          await forceRefresh();
+                          return;
+                        }
+                      }                      
+                      onSubmit(e as any);
+                      
+                      // Refresh rate limit status after submission
+                      if (!user?.sub) {
+                        setTimeout(() => forceRefresh(), 500);
+                      }
+                    }
+                  }
+                }}
+                rows={1}
+                style={{
+                  lineHeight: '1.5rem',
+                  maxHeight: '120px',
+                  overflowY: 'auto'
+                }}
+              />
+            </form>
+            </>
+          )}
         </div>
         
         {/* Action buttons row */}
-        <div className="flex items-center justify-between px-3 pb-3">
-          <div className="flex items-center gap-1">
-            {/* File upload button */}
-            <button
-              type="button"
-              onClick={() => setShowFileUpload(!showFileUpload)}
-              className={cn(
-                "composer-btn flex h-8 w-8 items-center justify-center rounded-full transition-colors",
-                "hover:bg-muted text-muted-foreground hover:text-foreground",
-                (showFileUpload || contextFiles.length > 0) && "text-primary bg-primary/10"
+        {!effectiveIsLimitReached && (
+          <div className="flex items-center justify-between px-3 pb-3">
+            <div className="flex items-center gap-1">
+              {/* File upload button */}
+              <button
+                type="button"
+                onClick={() => setShowFileUpload(!showFileUpload)}
+                className={cn(
+                  "composer-btn flex h-8 w-8 items-center justify-center rounded-full transition-colors",
+                  "hover:bg-muted text-muted-foreground hover:text-foreground",
+                  (showFileUpload || contextFiles.length > 0) && "text-primary bg-primary/10"
+                )}
+                aria-label="Add files and photos"
+              >
+                <Plus className="w-4 h-4" strokeWidth={1.75} />
+              </button>
+              
+              {/* Private chat toggle button */}
+              {onPrivateModeToggle && (
+                <button
+                  type="button"
+                  onClick={onPrivateModeToggle}
+                  className={cn(
+                    "composer-btn flex h-8 w-8 items-center justify-center rounded-full transition-colors",
+                    "hover:bg-muted text-muted-foreground hover:text-foreground",
+                    isPrivateMode && "text-amber-600 bg-amber-100 dark:bg-amber-900/20 dark:text-amber-400"
+                  )}
+                  aria-label={isPrivateMode ? "Switch to regular chat" : "Switch to private chat"}
+                  title={isPrivateMode ? "Private chat (local only)" : "Enable private chat"}
+                >
+                  {isPrivateMode ? (
+                    <Lock className="w-4 h-4" strokeWidth={1.75} />
+                  ) : (
+                    <LockOpen className="w-4 h-4" strokeWidth={1.75} />
+                  )}
+                </button>
               )}
-              aria-label="Add files and photos"
-            >
-              <Plus className="w-4 h-4" strokeWidth={1.75} />
-            </button>
-          </div>
-          
-          {/* Submit/Stop button on the right */}
-          <div className="flex items-center gap-1">
+            </div>
+            
+            {/* Submit/Stop button on the right */}
+            <div className="flex items-center gap-1">
+            {/* Rate limit icon for unauthenticated users */}
+            {!user?.sub && isNearLimit && (
+              <TooltipProvider>
+                <Tooltip open={showRateLimitTooltip} onOpenChange={setShowRateLimitTooltip}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex h-8 w-8 items-center justify-center text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300 transition-colors cursor-pointer"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setShowRateLimitTooltip(!showRateLimitTooltip);
+                      }}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.464 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                      </svg>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    <p>You have {limit - used} message{limit - used !== 1 ? 's' : ''} remaining</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            
             {/* Voice recording button loading state */}
             {isCheckingVoiceAvailability && (
               <button
@@ -288,13 +499,26 @@ export function ChatInput({
                   (isLoading || !input.trim()) && "opacity-30 cursor-not-allowed"
                 )}
                 aria-label="Send message"
-                onClick={(e) => {
+                onClick={async (e) => {
                   if (isRecording) {
                     stopRecording();
                   }
                   if (input.trim() && !isLoading) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    // Check rate limit before submitting for anonymous users
+                    if (!user?.sub) {
+                      const canSubmit = await checkBeforeSubmit();
+                      if (!canSubmit) {
+                        await forceRefresh();
+                        return;
+                      }
+                    }
+                    
                     onSubmit(e as any);
+                    
+                    // Refresh rate limit status after submission
+                    if (!user?.sub) {
+                      setTimeout(() => forceRefresh(), 500);
+                    }
                   }
                 }}
               >
@@ -305,7 +529,11 @@ export function ChatInput({
             )}
           </div>
         </div>
+      )}
       </div>
+      
+      {/* Terms and Privacy Disclaimer */}
+      <TermsDisclaimer />
       
       {/* Custom styles */}
       <style>{`

@@ -10,9 +10,8 @@ import { ChatMessages } from '@/components/chat/chat-messages';
 import { ModelConfig } from '@/components/model-config';
 import { Button } from "@/components/ui/button";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function ModelDetailPage( {params}: any) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  
   const promiseParams: any = use(params);
   const modelId = promiseParams?.modelId || '';
   const router = useRouter();

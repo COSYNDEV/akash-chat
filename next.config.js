@@ -29,6 +29,10 @@ const nextConfig = {
   trailingSlash: true,
   // Compress output
   compress: true,
+  // Handle Auth0 compatibility with Next.js 15
+  experimental: {
+    dynamicIO: false,
+  },
   // Add proper MIME types for improved security and performance
   headers: async () => {
     return [

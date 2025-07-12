@@ -1,8 +1,9 @@
 'use client';
 
 import { useChat } from '@ai-sdk/react'
+import { useUser } from '@auth0/nextjs-auth0/client';
 import type { Message as AIMessage } from 'ai';
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { useWindowSize } from 'usehooks-ts';
 
 import { DEFAULT_SYSTEM_PROMPT } from '@/app/config/api';
@@ -10,11 +11,15 @@ import { CACHE_TTL } from '@/app/config/api';
 import { models as defaultModels, defaultModel, Model } from '@/app/config/models';
 import { ChatHistory } from '@/components/chat/chat-sidebar';
 import { useChatHistory } from '@/hooks/use-chat-history';
+import { useDatabaseSync } from '@/hooks/use-database-sync';
+import { useEncryptedSettings, UserPreferences } from '@/hooks/use-encrypted-settings';
 import { Folder, useFolders } from '@/hooks/use-folders';
 import { getAccessToken, storeAccessToken, processMessages } from '@/lib/utils';
 
 const SELECTED_MODEL_KEY = 'selectedModel';
 const CURRENT_SYSTEM_PROMPT_KEY = 'currentSystemPrompt';
+const CURRENT_TEMPERATURE_KEY = 'currentTemperature';
+const CURRENT_TOP_P_KEY = 'currentTopP';
 
 export interface ContextFile {
   id: string;
@@ -25,6 +30,11 @@ export interface ContextFile {
 }
 
 interface ChatContextType {
+  // Auth state  
+  user: any;
+  isAuthenticated: boolean;
+  isLoadingAuth: boolean;
+  
   // Session state
   sessionInitialized: boolean;
   sessionError: string | null;
@@ -50,6 +60,12 @@ interface ChatContextType {
   isConfigOpen: boolean;
   setIsConfigOpen: (open: boolean) => void;
   
+  // Saved prompts management
+  savedPrompts: any[];
+  savePrompt: (name: string, content: string, position?: number) => Promise<any>;
+  updatePrompt: (promptId: string, updates: Partial<{ name: string; content: string; position: number }>) => Promise<void>;
+  deletePrompt: (promptId: string) => Promise<void>;
+  
   // UI state
   isMobile: boolean;
   isSidebarOpen: boolean;
@@ -68,6 +84,8 @@ interface ChatContextType {
   setContextFiles: (files: ContextFile[]) => void;
   reload: () => void;
   stop: () => void;
+  isPrivateMode: boolean;
+  setIsPrivateMode: (isPrivate: boolean) => void;
   
   // Chat management
   selectedChat: string | null;
@@ -77,20 +95,37 @@ interface ChatContextType {
   handleChatSelect: (chatId: string) => void;
   handleMessagesSelect: (messages: AIMessage[]) => void;
   saveChat: (messages: AIMessage[], model: Model, system: string) => string;
+  savePrivateChat: (messages: AIMessage[], model: Model, system: string) => string;
   updateChat: (chatId: string, messages: AIMessage[], model?: Model) => void;
   deleteChat: (chatId: string) => void;
   renameChat: (chatId: string, newName: string) => void;
   moveToFolder: (chatId: string, folderId: string | null) => void;
   exportChats: () => void;
   importChats: (file: File) => Promise<void>;
-  branchChat: (chatId: string, messageIndex: number) => string | null;
+  branchChat: (chatId: string, messageIndex: number) => ChatHistory | null;
   handleBranch: (messageIndex: number) => void;
+
+  getPrivateChatsOnly: () => ChatHistory[];
+  getNonPrivateChatsOnly: () => ChatHistory[];
+  handleNewPrivateChat: () => void;
+  forceUpdateCounter: number;
+  syncStatus: 'idle' | 'checking' | 'syncing' | 'loading' | 'complete' | 'error';
+  syncProgress: {
+    stage: 'checking' | 'loading' | 'merging' | 'syncing' | 'complete';
+    message: string;
+    percentage: number;
+  };
+  settingsHasUnsavedChanges: boolean;
   
   // Folder management
   folders: Folder[];
-  createFolder: (name: string) => string;
+  createFolder: (name: string) => Promise<string>;
   updateFolder: (folderId: string, name: string) => void;
   deleteFolder: (folderId: string) => void;
+  refreshFolders: () => void;
+  
+  // Logout cleanup
+  resetAllState: () => void;
 }
 
 export const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -98,6 +133,10 @@ export const ChatContext = createContext<ChatContextType | undefined>(undefined)
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { width: windowWidth } = useWindowSize();
   const isMobile = windowWidth ? windowWidth < 768 : false;
+  
+  // Auth state
+  const { user, isLoading: isLoadingAuth } = useUser();
+  const isAuthenticated = !!user;
   
   // Session state
   const [sessionInitialized, setSessionInitialized] = useState(false);
@@ -121,16 +160,49 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     return DEFAULT_SYSTEM_PROMPT;
   };
+
+  const getSavedTemperature = () => {
+    if (typeof window !== 'undefined') {
+      const savedTemp = localStorage.getItem(CURRENT_TEMPERATURE_KEY);
+      return savedTemp ? parseFloat(savedTemp) : 0.7;
+    }
+    return 0.7;
+  };
+
+  const getSavedTopP = () => {
+    if (typeof window !== 'undefined') {
+      const savedTopP = localStorage.getItem(CURRENT_TOP_P_KEY);
+      return savedTopP ? parseFloat(savedTopP) : 0.95;
+    }
+    return 0.95;
+  };
   
   const [modelSelection, setModelSelection] = useState(getSavedModel);
   const [availableModels, setAvailableModels] = useState<Model[]>(defaultModels);
   const [isLoadingModels, setIsLoadingModels] = useState(true);
   const [modelError, setModelError] = useState<string | null>(null);
   
-  // Config state
-  const [systemPrompt, setSystemPrompt] = useState(getSavedSystemPrompt);
-  const [temperature, setTemperature] = useState(0.7);
-  const [topP, setTopP] = useState(0.95);
+  // Config state - use encrypted settings hook for system prompt
+  const { 
+    savedPrompts,
+    userPreferences, 
+    saveUserPreferences, 
+    savePrompt,
+    updatePrompt,
+    deletePrompt,
+    hasUnsavedChanges: settingsHasUnsavedChanges 
+  } = useEncryptedSettings();
+  
+  // Refs to track previous values and prevent unnecessary updates
+  const prevUserPreferencesRef = useRef<UserPreferences | null>(null);
+  
+  // Initialize system prompt from localStorage (userPreferences loads async)
+  const [systemPrompt, setSystemPrompt] = useState(() => {
+    return getSavedSystemPrompt();
+  });
+  
+  const [temperature, setTemperature] = useState(getSavedTemperature);
+  const [topP, setTopP] = useState(getSavedTopP);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   
   // UI state
@@ -139,10 +211,95 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Chat state
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
   const [contextFiles, setContextFiles] = useState<ContextFile[]>([]);
+  const [isPrivateMode, setIsPrivateMode] = useState(false);
   
   // Custom hooks
-  const { chats, saveChat, updateChat, deleteChat, renameChat, moveToFolder, exportChats, importChats, branchChat } = useChatHistory();
-  const { folders, createFolder, updateFolder, deleteFolder } = useFolders();
+  const { folders, createFolder, updateFolder, deleteFolder: deleteFolderOnly, refreshFolders } = useFolders();
+  
+  const chatHistoryHook = useChatHistory(refreshFolders);
+  const { 
+    chats, 
+    saveChat, 
+    savePrivateChat,
+    updateChat, 
+    deleteChat, 
+    deleteChatsByFolderId,
+    renameChat, 
+    moveToFolder, 
+    exportChats, 
+    importChats, 
+    branchChat,
+    getPrivateChatsOnly,
+    getNonPrivateChatsOnly,
+    forceUpdateCounter
+  } = chatHistoryHook;
+
+  // Enhanced deleteFolder that also deletes chats in the folder
+  const deleteFolder = useCallback((folderId: string) => {
+    // First delete all chats in this folder
+    deleteChatsByFolderId(folderId);
+    // Then delete the folder itself
+    deleteFolderOnly(folderId);
+  }, [deleteChatsByFolderId, deleteFolderOnly]);
+  
+  const { syncStatus, progress } = useDatabaseSync({
+    mergeDatabaseChats: chatHistoryHook.mergeDatabaseChats,
+    refreshFolders: refreshFolders
+  });
+
+  // Update system prompt when user preferences change
+  useEffect(() => {
+    if (userPreferences !== null) {
+      // userPreferences has been loaded from database
+      if (userPreferences.system_prompt !== undefined) {
+        // Database has a system prompt - use it
+        setSystemPrompt(userPreferences.system_prompt);
+      }
+      // If system_prompt is undefined, keep the current value (localStorage or default)
+    } else if (prevUserPreferencesRef.current !== null) {
+      // User logged out - reset to default system prompt
+      setSystemPrompt(DEFAULT_SYSTEM_PROMPT);
+    }
+    prevUserPreferencesRef.current = userPreferences;
+  }, [userPreferences]);
+
+  // Reset temperature and topP when user preferences change
+  useEffect(() => {
+    // Only update if the value has actually changed from the previous userPreferences
+    const prevTemp = prevUserPreferencesRef.current?.temperature;
+    if (userPreferences?.temperature !== undefined && userPreferences.temperature !== prevTemp) {
+      setTemperature(userPreferences.temperature);
+    } else if (userPreferences === null && prevUserPreferencesRef.current !== null) {
+      // User logged out - reset to default temperature
+      setTemperature(0.6);
+    }
+    prevUserPreferencesRef.current = userPreferences;
+  }, [userPreferences?.temperature, userPreferences]);
+
+  useEffect(() => {
+    // Only update if the value has actually changed from the previous userPreferences
+    const prevTopP = prevUserPreferencesRef.current?.top_p;
+    if (userPreferences?.top_p !== undefined && userPreferences.top_p !== prevTopP) {
+      setTopP(userPreferences.top_p);
+    } else if (userPreferences === null && prevUserPreferencesRef.current !== null) {
+      // User logged out - reset to default topP
+      setTopP(0.95);
+    }
+    prevUserPreferencesRef.current = userPreferences;
+  }, [userPreferences?.top_p, userPreferences]);
+
+  // Reset model selection when user preferences change
+  useEffect(() => {
+    // Only update if the value has actually changed from the previous userPreferences
+    const prevSelectedModel = prevUserPreferencesRef.current?.selected_model;
+    if (userPreferences?.selected_model !== undefined && userPreferences.selected_model !== prevSelectedModel) {
+      setModelSelection(userPreferences.selected_model);
+    } else if (userPreferences === null && prevUserPreferencesRef.current !== null) {
+      // User logged out - reset to default model
+      setModelSelection('Qwen3-235B-A22B-FP8');
+    }
+    prevUserPreferencesRef.current = userPreferences;
+  }, [userPreferences?.selected_model, userPreferences]);
   
   // AI chat hook
   const {
@@ -157,7 +314,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     reload,
     stop,
   } = useChat({
-    api: '/api/chat',
+    api: '/api/chat/',
     experimental_throttle: 250,
     body: {
       model: modelSelection,
@@ -172,17 +329,34 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     },
     onFinish: (message: AIMessage) => {
       setModelError(null);
+      const newUserMessage: AIMessage = {
+        role: 'user',
+        content: input,
+        id: 'user-message',
+        createdAt: new Date(),
+      }
+      const allMessages = [...messages, newUserMessage, message];
+      
       if (!selectedChat) {
-        const chatId = saveChat([...messages, message], {
-          id: modelSelection,
-          name: availableModels.find((m: Model) => m.id === modelSelection)?.name || modelSelection,
-        }, systemPrompt);
+        // New chat - save it (private or regular based on mode)
+        const chatId = isPrivateMode 
+          ? savePrivateChat(allMessages, {
+              id: modelSelection,
+              name: availableModels.find((m: Model) => m.id === modelSelection)?.name || modelSelection,
+            }, systemPrompt)
+          : saveChat(allMessages, {
+              id: modelSelection,
+              name: availableModels.find((m: Model) => m.id === modelSelection)?.name || modelSelection,
+            }, systemPrompt);
         setSelectedChat(chatId);
+        setIsPrivateMode(false); // Reset private mode after creating chat
+      } else {
+        // Existing chat - immediately save to database after model completion
+        updateChat(selectedChat, allMessages);
       }
     },
     onError: (error: Error) => {
       setModelError(error.message);
-      console.error('Chat error:', error);
     },
   });
 
@@ -193,12 +367,131 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [modelSelection]);
 
-  // Save system prompt to localStorage
+  // Save user preferences to database when authenticated (debounced via useEncryptedSettings)
+  useEffect(() => {
+    if (user?.sub && sessionInitialized) {
+      // Only save if we have actual values to save
+      const preferences = {
+        selected_model: modelSelection,
+        system_prompt: systemPrompt,
+        temperature,
+        top_p: topP,
+        last_selected_chat_id: selectedChat || undefined
+      };
+      
+      // Check if any values have actually changed from current userPreferences
+      const hasChanges = !userPreferences || 
+        userPreferences.selected_model !== preferences.selected_model ||
+        userPreferences.system_prompt !== preferences.system_prompt ||
+        userPreferences.temperature !== preferences.temperature ||
+        userPreferences.top_p !== preferences.top_p ||
+        userPreferences.last_selected_chat_id !== preferences.last_selected_chat_id;
+      
+      if (hasChanges) {
+        saveUserPreferences(preferences);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.sub, sessionInitialized, modelSelection, systemPrompt, temperature, topP, selectedChat]); 
+
+  // Sync messages when they change (but not during streaming)
+  // Track if we're currently loading a chat to prevent saves during selection
+  const [isLoadingChat, setIsLoadingChat] = useState(false);
+
+  // Track the last message length and content to detect actual changes vs. loading
+  const prevMessagesRef = useRef<any[]>([]);
+  
+  useEffect(() => {
+    // Only sync if we have a selected chat, messages, and we're not currently streaming or loading
+    // Use status to determine if we're streaming: 'streaming' or 'submitted' means don't sync yet
+    const isStreaming = status === 'streaming' || status === 'submitted';
+    
+    // Check if messages have actually changed from the previous state
+    const messagesChanged = messages.length !== prevMessagesRef.current.length ||
+      JSON.stringify(messages) !== JSON.stringify(prevMessagesRef.current);
+    
+    // Only update if:
+    // 1. We have a selected chat and messages
+    // 2. We're not streaming or loading a chat
+    // 3. The messages have actually changed (not just loaded)
+    // 4. We're not currently loading a chat
+    if (selectedChat && messages.length > 0 && !isStreaming && !isLoadingChat && messagesChanged) {
+      // Check that this isn't just a chat loading event by ensuring we have a previous messages state
+      if (prevMessagesRef.current.length > 0 || messages.length > 1) {
+        updateChat(selectedChat, messages, undefined, true);
+      }
+    }
+    
+    // Update the ref after checking
+    prevMessagesRef.current = [...messages];
+  }, [messages, status, updateChat, isLoadingChat, selectedChat]); // Added selectedChat back to detect loading
+
+  // Save system prompt to localStorage (for backward compatibility)
   useEffect(() => {
     if (typeof window !== 'undefined' && systemPrompt !== undefined) {
       localStorage.setItem(CURRENT_SYSTEM_PROMPT_KEY, systemPrompt);
     }
   }, [systemPrompt]);
+
+  // Save temperature to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined' && temperature !== undefined) {
+      localStorage.setItem(CURRENT_TEMPERATURE_KEY, temperature.toString());
+    }
+  }, [temperature]);
+
+  // Save top-p to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined' && topP !== undefined) {
+      localStorage.setItem(CURRENT_TOP_P_KEY, topP.toString());
+    }
+  }, [topP]);
+
+  // Cleanup private chats when the component unmounts or page is unloaded
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (selectedChat) {
+        const currentChat = chats.find((c: { id: string; }) => c.id === selectedChat);
+        if (currentChat && currentChat.isPrivate) {
+          // Remove from localStorage when leaving the page
+          const privateChats = JSON.parse(localStorage.getItem('privateChats') || '{}');
+          delete privateChats[currentChat.id];
+          localStorage.setItem('privateChats', JSON.stringify(privateChats));
+        }
+      }
+      // Also clean up any other private chats in localStorage
+      localStorage.removeItem('privateChats');
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      // Also cleanup on component unmount
+      if (selectedChat) {
+        const currentChat = chats.find((c: { id: string; }) => c.id === selectedChat);
+        if (currentChat && currentChat.isPrivate) {
+          // Remove from localStorage when component unmounts
+          const privateChats = JSON.parse(localStorage.getItem('privateChats') || '{}');
+          delete privateChats[currentChat.id];
+          localStorage.setItem('privateChats', JSON.stringify(privateChats));
+        }
+      }
+      // Clean up all private chats in localStorage on unmount
+      localStorage.removeItem('privateChats');
+    };
+  }, [selectedChat, chats]);
+
+  // Clean up old private chats from localStorage on app startup
+  useEffect(() => {
+    if (sessionInitialized) {
+      const privateChats = JSON.parse(localStorage.getItem('privateChats') || '{}');
+      const privateChatCount = Object.keys(privateChats).length;
+      if (privateChatCount > 0) {
+        localStorage.removeItem('privateChats');
+      }
+    }
+  }, [sessionInitialized]);
 
   // Effect hooks
   useEffect(() => {
@@ -225,7 +518,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!response.ok) {
           const data = await response.json();
           if (response.status === 403 && data.error === 'Invalid Access token' ) {
-            console.log('Invalid Access token');
             setIsAccessError(true);
           } else {
             throw new Error('Failed to initialize session');
@@ -233,12 +525,35 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         setSessionInitialized(true);
       } catch (error) {
-        console.error('Failed to initialize session:', error);
         setSessionError('Unable to establish a secure session. Please try refreshing the page.');
       }
     };
     init();
   }, []);
+
+  // Initialize user when they log in (create LiteLLM API key)
+  useEffect(() => {
+    const initializeUser = async () => {
+      if (!user?.sub || !sessionInitialized || isLoadingAuth) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/user/initialize', {
+          method: 'POST',
+          credentials: 'include'
+        });
+
+        if (!response.ok) {
+          console.error('Failed to initialize user:', await response.text());
+        }
+      } catch (error) {
+        console.error('Error initializing user:', error);
+      }
+    };
+
+    initializeUser();
+  }, [user?.sub, sessionInitialized, isLoadingAuth]);
 
   useEffect(() => {
     if (!sessionInitialized) {return;}
@@ -325,7 +640,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           throw new Error('Invalid model data received');
         }
       } catch (error) {
-        console.error('Error fetching models:', error);
         setModelError('Unable to load chat models. Please try again later.');
       } finally {
         setIsLoadingModels(false);
@@ -333,6 +647,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     
     fetchModels();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionInitialized]);
 
   useEffect(() => {
@@ -342,12 +657,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setTopP(model.top_p || 0.95);
     }
   }, [modelSelection, availableModels]);
-
-  useEffect(() => {
-    if (selectedChat && messages.length > 0) {
-      updateChat(selectedChat, messages);
-    }
-  }, [messages, selectedChat, updateChat]);
 
   // Handle access token submission
   const handleAccessTokenSubmit = async () => {
@@ -378,29 +687,112 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         setSessionInitialized(true);
       } catch (error) {
-        console.error('Error validating access token:', error);
         setModelError('Failed to validate access token. Please try again.');
       }
     }
   };
 
   const handleNewChat = () => {
+    // If currently on a private chat, store it in localStorage when creating a new chat
+    if (selectedChat) {
+      const currentChat = chats.find((c: { id: string; }) => c.id === selectedChat);
+      if (currentChat && currentChat.isPrivate) {
+        // Store the private chat in localStorage
+        const privateChats = JSON.parse(localStorage.getItem('privateChats') || '{}');
+        privateChats[currentChat.id] = currentChat;
+        localStorage.setItem('privateChats', JSON.stringify(privateChats));
+        // Remove from memory but keep in localStorage
+        deleteChat(selectedChat);
+      }
+    }
+    
     setMessages([]);
     setSelectedChat(null);
     setModelError(null);
+    setIsPrivateMode(false);
+  };
+
+  const handleNewPrivateChat = () => {
+    // If currently on a private chat, store it in localStorage when creating a new private chat
+    if (selectedChat) {
+      const currentChat = chats.find((c: { id: string; }) => c.id === selectedChat);
+      if (currentChat && currentChat.isPrivate) {
+        // Store the private chat in localStorage
+        const privateChats = JSON.parse(localStorage.getItem('privateChats') || '{}');
+        privateChats[currentChat.id] = currentChat;
+        localStorage.setItem('privateChats', JSON.stringify(privateChats));
+        // Remove from memory but keep in localStorage
+        deleteChat(selectedChat);
+      }
+    }
+    
+    setMessages([]);
+    setSelectedChat(null);
+    setModelError(null);
+    setIsPrivateMode(true);
   };
 
   const handleChatSelect = (chatId: string) => {
     if (isLoading) {return;}
+    
+    // Set loading flag to prevent saves during chat switching
+    setIsLoadingChat(true);
+    
+    // If switching away from a private chat, store it in localStorage instead of deleting
+    if (selectedChat) {
+      const currentChat = chats.find((c: { id: string; }) => c.id === selectedChat);
+      if (currentChat && currentChat.isPrivate && selectedChat !== chatId) {
+        // Store the private chat in localStorage
+        const privateChats = JSON.parse(localStorage.getItem('privateChats') || '{}');
+        privateChats[currentChat.id] = currentChat;
+        localStorage.setItem('privateChats', JSON.stringify(privateChats));
+        // Remove from memory but keep in localStorage
+        deleteChat(selectedChat);
+      }
+    }
+    
+    // Check if the target chat is a private chat that might be in localStorage
+    const privateChats = JSON.parse(localStorage.getItem('privateChats') || '{}');
+    const storedPrivateChat = privateChats[chatId];
+    
+    if (storedPrivateChat) {
+      // Remove from localStorage since we're about to restore it
+      delete privateChats[chatId];
+      localStorage.setItem('privateChats', JSON.stringify(privateChats));
+      
+      // Restore the private chat by recreating it
+      const restoredChatId = savePrivateChat(
+        storedPrivateChat.messages,
+        storedPrivateChat.model,
+        storedPrivateChat.system || ''
+      );
+      
+      setSelectedChat(restoredChatId);
+      setModelSelection(storedPrivateChat.model.id);
+      setSystemPrompt(storedPrivateChat.system || DEFAULT_SYSTEM_PROMPT);
+      setMessages(storedPrivateChat.messages || []);
+      setIsPrivateMode(true);
+      setModelError(null);
+      
+      // Clear loading flag after a brief delay
+      setTimeout(() => setIsLoadingChat(false), 100);
+      return;
+    }
+    
     const chat = chats.find((c: { id: string; }) => c.id === chatId);
     if (chat) {
       setSelectedChat(chatId);
       setModelSelection(chat.model.id);
-      if (chat.system) {
-        setSystemPrompt(chat.system);
-      }
+      setSystemPrompt(chat.system || DEFAULT_SYSTEM_PROMPT);
+      // Load the chat's messages
+      setMessages(chat.messages || []);
+      // Set private mode based on the selected chat's privacy setting
+      setIsPrivateMode(chat.isPrivate || false);
       setModelError(null);
     }
+    
+    // Clear loading flag after a brief delay to allow state to settle
+    setTimeout(() => setIsLoadingChat(false), 100);
   };
 
   const handleChatSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -410,12 +802,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // If there's a selected chat, update the model information before submitting
     if (selectedChat) {
       const currentChat = chats.find((chat: { id: string; }) => chat.id === selectedChat);
-      if (currentChat && currentChat.model.id !== modelSelection) {
-        // Update the existing chat with the new model
-        updateChat(selectedChat, messages, {
-          id: modelSelection,
-          name: availableModels.find((m: Model) => m.id === modelSelection)?.name || modelSelection,
-        });
+      if (currentChat && currentChat.model.id !== modelSelection && messages.length > 0) {
+        // Only update if we have messages and they appear to belong to this chat
+        // This prevents accidentally updating a chat with the wrong messages during chat switching
+        const messagesMatch = messages.length === currentChat.messages.length;
+        if (messagesMatch) {
+          updateChat(selectedChat, messages, {
+            id: modelSelection,
+            name: availableModels.find((m: Model) => m.id === modelSelection)?.name || modelSelection,
+          });
+        }
       }
     }
 
@@ -429,7 +825,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const processedMessages = processMessages(messages);
     setMessages(processedMessages);
 
-    await originalHandleSubmit(e);
+    originalHandleSubmit(e);
+    
   };
 
   const handleMessagesSelect = (messages: AIMessage[]) => {
@@ -443,23 +840,77 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const sourceChat = chats.find((chat: { id: string; }) => chat.id === selectedChat);
     if (!sourceChat) {return;}
     
-    const branchedChatId = branchChat(selectedChat, messageIndex);
+    const branchedChat = branchChat(selectedChat, messageIndex);
     
-    if (branchedChatId) {
-      const branchedMessages = sourceChat.messages.slice(0, messageIndex + 1);
+    if (branchedChat) {
+      // Set loading flag to prevent saves during chat switching
+      setIsLoadingChat(true);
       
-      // Switch to the new branch
-      setSelectedChat(branchedChatId);
-      setMessages(branchedMessages);
-      setModelSelection(sourceChat.model.id);
-      if (sourceChat.system) {
-        setSystemPrompt(sourceChat.system);
-      }
+      // Directly switch to the branched chat using the chat object
+      setSelectedChat(branchedChat.id);
+      setModelSelection(branchedChat.model.id);
+      setSystemPrompt(branchedChat.system || DEFAULT_SYSTEM_PROMPT);
+      setMessages(branchedChat.messages || []);
+      setIsPrivateMode(branchedChat.isPrivate || false);
       setModelError(null);
+      
+      // Clear loading flag after a brief delay
+      setTimeout(() => setIsLoadingChat(false), 100);
     }
   };
 
+  // Centralized state reset function for logout
+  const resetAllState = useCallback(() => {
+    try {
+      // 1. Reset session state
+      setSessionInitialized(false);
+      setSessionError(null);
+      setIsAccessError(false);
+      setAccessTokenInput('');
+      
+      // 2. Reset model state to defaults
+      setModelSelection(defaultModel);
+      setAvailableModels(defaultModels);
+      setIsLoadingModels(true);
+      setModelError(null);
+      
+      // 3. Reset config state to defaults
+      setSystemPrompt(DEFAULT_SYSTEM_PROMPT);
+      setTemperature(0.7);
+      setTopP(0.95);
+      setIsConfigOpen(false);
+      
+      // 4. Reset UI state
+      setSidebarOpen(!isMobile);
+      
+      // 5. Reset chat state
+      setMessages([]);
+      setInput('');
+      setSelectedChat(null);
+      setContextFiles([]);
+      setIsPrivateMode(false);
+      setIsLoadingChat(false);
+      
+      // 6. Clear AI chat state by calling stop if needed
+      if (isLoading) {
+        stop();
+      }
+      
+      // 7. Reset internal tracking refs
+      prevMessagesRef.current = [];
+      prevUserPreferencesRef.current = null;
+      
+    } catch (error) {
+      console.error('Error during state reset:', error);
+    }
+  }, [isMobile, isLoading, stop, setMessages, setInput]);
+
   const value: ChatContextType = {
+    // Auth state
+    user,
+    isAuthenticated,
+    isLoadingAuth,
+    
     // Session state
     sessionInitialized,
     sessionError,
@@ -485,6 +936,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isConfigOpen,
     setIsConfigOpen,
     
+    // Saved prompts management
+    savedPrompts,
+    savePrompt,
+    updatePrompt,
+    deletePrompt,
+    
     // UI state
     isMobile,
     isSidebarOpen,
@@ -503,15 +960,19 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setContextFiles,
     reload,
     stop,
+    isPrivateMode,
+    setIsPrivateMode,
     
     // Chat management
     selectedChat,
     setSelectedChat,
     chats,
     handleNewChat,
+    handleNewPrivateChat,
     handleChatSelect,
     handleMessagesSelect,
     saveChat,
+    savePrivateChat,
     updateChat,
     deleteChat,
     renameChat,
@@ -520,12 +981,22 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     importChats,
     branchChat,
     handleBranch,
+    getPrivateChatsOnly,
+    getNonPrivateChatsOnly,
+    forceUpdateCounter,
+    syncStatus,
+    syncProgress: progress,
+    settingsHasUnsavedChanges,
     
     // Folder management
     folders,
     createFolder,
     updateFolder,
     deleteFolder,
+    refreshFolders,
+    
+    // Logout cleanup
+    resetAllState,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
