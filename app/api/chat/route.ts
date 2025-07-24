@@ -161,7 +161,7 @@ async function handlePostRequest(req: Request) {
 
   return createDataStreamResponse({
     execute: dataStream => {
-      let systemToUse = system || DEFAULT_SYSTEM_PROMPT;
+      const systemToUse = system || DEFAULT_SYSTEM_PROMPT;
       const result = streamText({
         model: openai(model || defaultModel),
         messages: messagesToSend,
