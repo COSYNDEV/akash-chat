@@ -191,7 +191,7 @@ async function handlePostRequest(req: NextRequest) {
       if (smallResponse.toolResults.length > 0) {
         const imageResult = smallResponse.toolResults[0].result;
         
-        // Increment rate limit for successful image generation (unauthenticated users only)
+        // Increment rate limit for successful image generation
         if (!isAuthenticated && clientIP) {
           await incrementRateLimit(clientIP);
         }
@@ -236,7 +236,7 @@ async function handlePostRequest(req: NextRequest) {
 
   return createDataStreamResponse({
     execute: async dataStream => {
-      // Increment rate limit for successful request start (unauthenticated users and unverified authenticated users)
+      // Increment rate limit for successful request start
       if (shouldApplyRateLimit && clientIP) {
         await incrementRateLimit(clientIP);
       }
@@ -244,7 +244,7 @@ async function handlePostRequest(req: NextRequest) {
       const result = streamText({
         model: openaiClient(model || defaultModel),
         messages: messagesToSend,
-        system: system || DEFAULT_SYSTEM_PROMPT;,
+        system: system || DEFAULT_SYSTEM_PROMPT,
         temperature: temperature || selectedModel?.temperature,
         topP: topP || selectedModel?.top_p,
       });
