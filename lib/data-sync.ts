@@ -95,9 +95,32 @@ export function applyDataToLocalStorage(userData: UserData) {
       localStorage.setItem('currentTopP', userData.preferences.topP.toString());
     }
 
-    // Apply folders
+    // Apply folders (merge database folders with existing local folders)
     if (userData.folders.length > 0) {
-      localStorage.setItem('folders', JSON.stringify(userData.folders));
+      // Get existing local folders
+      const existingFoldersStr = localStorage.getItem('folders');
+      const existingFolders = existingFoldersStr ? JSON.parse(existingFoldersStr) : [];
+      
+      // Convert database folders to localStorage format with proper source tagging
+      const databaseFolders = userData.folders.map(folder => ({
+        ...folder,
+        source: 'database' as const,
+        databaseId: folder.id,
+        lastSynced: folder.updated_at || new Date().toISOString(),
+      }));
+      
+      // Create a Set of database folder IDs for deduplication
+      const dbFolderIds = new Set(databaseFolders.map(f => f.id));
+      
+      // Preserve existing local folders that don't conflict with database folders
+      const preservedLocalFolders = existingFolders.filter((localFolder: any) => 
+        localFolder.source === 'local' && !dbFolderIds.has(localFolder.id)
+      );
+      
+      // Merge database folders with preserved local folders
+      const mergedFolders = [...databaseFolders, ...preservedLocalFolders];
+      
+      localStorage.setItem('folders', JSON.stringify(mergedFolders));
     }
 
     // Apply saved prompts from database to localStorage (preserving existing local prompts)
@@ -264,8 +287,44 @@ export function cleanupUserDataOnLogout(): void {
       }
     }
 
-    // 4. Clean up folders (remove all folders as they're user-specific)  
-    localStorage.removeItem('folders');
+    // 4. Clean up folders (keep local folders AND database folders that contain local chats)
+    const foldersStr = localStorage.getItem('folders');
+    if (foldersStr) {
+      try {
+        const folders = JSON.parse(foldersStr);
+        
+        // Helper function to count local chats in a folder
+        const getLocalChatCountInFolder = (folderId: string): number => {
+          try {
+            const chatsStr = localStorage.getItem('chats');
+            if (!chatsStr) return 0;
+            
+            const chats = JSON.parse(chatsStr);
+            return chats.filter((chat: any) => 
+              chat.folderId === folderId && 
+              (chat.source === 'local' || (!chat.source && !chat.databaseId))
+            ).length;
+          } catch (error) {
+            return 0;
+          }
+        };
+        
+        // Keep local folders AND database folders that contain local chats
+        const foldersToPreserve = folders.filter((folder: any) => 
+          folder.source !== 'database' || 
+          !folder.databaseId || 
+          getLocalChatCountInFolder(folder.id) > 0
+        );
+        
+        if (foldersToPreserve.length > 0) {
+          localStorage.setItem('folders', JSON.stringify(foldersToPreserve));
+        } else {
+          localStorage.removeItem('folders');
+        }
+      } catch (error) {
+        localStorage.removeItem('folders');
+      }
+    }
 
     // 5. Clean up private chats (stored separately from regular chats)
     localStorage.removeItem('privateChats');

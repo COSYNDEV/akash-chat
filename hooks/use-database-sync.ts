@@ -28,12 +28,13 @@ interface UseDatabaseSyncResult {
 
 interface UseDatabaseSyncOptions {
   mergeDatabaseChats?: (chats: any[]) => void;
+  mergeDatabaseFolders?: (folders: any[]) => void;
   refreshFolders?: () => void;
 }
 
 export function useDatabaseSync(options: UseDatabaseSyncOptions = {}): UseDatabaseSyncResult {
   const { user, isLoading: isAuthLoading } = useUser();
-  const { mergeDatabaseChats, refreshFolders } = options;
+  const { mergeDatabaseChats, mergeDatabaseFolders, refreshFolders } = options;
   const [isLoading, setIsLoading] = useState(false);
   const [hasData, setHasData] = useState(false);
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -59,12 +60,21 @@ export function useDatabaseSync(options: UseDatabaseSyncOptions = {}): UseDataba
       
       setUserData(data);
       setHasData(true);
-      setProgress({ stage: 'merging', message: 'Merging your chats...', percentage: 50 });
+      setProgress({ stage: 'merging', message: 'Merging your data...', percentage: 50 });
       
-      // Apply preferences to localStorage (but not chats - handled separately)
+      // Apply preferences to localStorage (but not chats/folders - handled separately)
       applyDataToLocalStorage(data);
       
-      // Refresh folders after applying data
+      // Merge database folders with local folders using the provided function
+      if (data.folders && data.folders.length > 0 && mergeDatabaseFolders) {
+        try {
+          mergeDatabaseFolders(data.folders);
+        } catch (error) {
+          console.error('🔄 DATABASE SYNC: Error calling mergeDatabaseFolders:', error);
+        }
+      }
+      
+      // Refresh folders after merging
       if (refreshFolders) {
         refreshFolders();
       }

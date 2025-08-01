@@ -88,16 +88,25 @@ export default function PrivacyPage() {
               
               <h3 className="text-xl font-semibold text-primary mb-3">Encryption and Security</h3>
               <ul className="space-y-2 text-muted-foreground mb-4">
-                <li className="flex items-start"><span className="mr-2">•</span><span><strong>Client-Side Encryption</strong>: All sensitive data is encrypted on your device before being sent to our servers using AES-256-CBC encryption</span></li>
-                <li className="flex items-start"><span className="mr-2">•</span><span><strong>User-Specific Keys</strong>: Each user has unique encryption keys derived from your account</span></li>
-                <li className="flex items-start"><span className="mr-2">•</span><span><strong>Local Storage</strong>: Data is initially stored in your browser's local storage for immediate access</span></li>
-                <li className="flex items-start"><span className="mr-2">•</span><span><strong>Cloud Sync</strong>: Encrypted data is synchronized to our database for authenticated users</span></li>
+                <li className="flex items-start"><span className="mr-2">•</span><span><strong>Server-Side Encryption</strong>: All sensitive data is encrypted on our servers before being stored in the database using AES-GCM encryption</span></li>
+                <li className="flex items-start"><span className="mr-2">•</span><span><strong>Transport Security</strong>: All data is transmitted over HTTPS/TLS encryption</span></li>
+                <li className="flex items-start"><span className="mr-2">•</span><span><strong>User-Specific Keys</strong>: Each user has unique encryption keys </span></li>
+                <li className="flex items-start"><span className="mr-2">•</span><span><strong>Database Security</strong>: Encrypted data is stored in PostgreSQL with additional security measures</span></li>
+              </ul>
+
+              <h3 className="text-xl font-semibold text-primary mb-4">Data Access and Processing</h3>
+              <ul className="space-y-2 text-muted-foreground mb-4">
+                <li className="flex items-start"><span className="mr-2">•</span><span><strong>AI Processing</strong>: Messages are processed by AI models to generate responses</span></li>
+                <li className="flex items-start"><span className="mr-2">•</span><span><strong>No Human Review</strong>: Messages are processed automatically by AI systems</span></li>
+                <li className="flex items-start"><span className="mr-2">•</span><span><strong>User Isolation</strong>: Each user's data is encrypted with unique keys</span></li>
+                <li className="flex items-start"><span className="mr-2">•</span><span><strong>Legal Requirements</strong>: We may access data only when required by law or for security investigations</span></li>
               </ul>
 
               <h3 className="text-xl font-semibold text-primary mb-3">Data Location</h3>
               <ul className="space-y-2 text-muted-foreground mb-4">
                 <li className="flex items-start"><span className="mr-2">•</span><span>AI Processing: Distributed across Akash Network's decentralized infrastructure</span></li>
                 <li className="flex items-start"><span className="mr-2">•</span><span>Session Management: Redis cache with configurable data retention</span></li>
+                <li className="flex items-start"><span className="mr-2">•</span><span>Database Storage: PostgreSQL database with server-side encryption</span></li>
               </ul>
 
               <h3 className="text-xl font-semibold text-primary mb-3">Private Chats</h3>
@@ -198,7 +207,7 @@ export default function PrivacyPage() {
             <section>
               <h2 className="text-2xl font-semibold text-primary mb-4">International Users</h2>
               <p className="text-muted-foreground leading-relaxed">
-                AkashChat is powered by Akash Network's global, decentralized infrastructure. Your data may be processed across multiple geographic locations as part of this decentralized network. All data is encrypted before leaving your device regardless of processing location.
+                AkashChat is powered by Akash Network's global, decentralized infrastructure. Your data may be processed across multiple geographic locations as part of this decentralized network. All data is encrypted using server-side encryption before being stored in our database, regardless of processing location.
               </p>
             </section>
 

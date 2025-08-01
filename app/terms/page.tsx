@@ -150,7 +150,8 @@ export default function TermsPage() {
               <h3 className="text-xl font-semibold text-primary mb-3">6.1 Data Handling</h3>
               <ul className="space-y-2 text-muted-foreground mb-4">
                 <li className="flex items-start"><span className="mr-2">•</span><span>Your use of the Service is governed by our Privacy Notice</span></li>
-                <li className="flex items-start"><span className="mr-2">•</span><span>We implement client-side encryption for sensitive data</span></li>
+                <li className="flex items-start"><span className="mr-2">•</span><span>We implement server-side encryption for sensitive data using AES-GCM encryption</span></li>
+                <li className="flex items-start"><span className="mr-2">•</span><span>All data is transmitted over HTTPS/TLS encryption</span></li>
                 <li className="flex items-start"><span className="mr-2">•</span><span>Private chats are never stored permanently and exist only in memory</span></li>
               </ul>
 

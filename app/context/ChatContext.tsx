@@ -214,7 +214,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isPrivateMode, setIsPrivateMode] = useState(false);
   
   // Custom hooks
-  const { folders, createFolder, updateFolder, deleteFolder: deleteFolderOnly, refreshFolders } = useFolders();
+  const foldersHook = useFolders();
+  const { 
+    folders, 
+    createFolder, 
+    updateFolder, 
+    deleteFolder: deleteFolderOnly, 
+    refreshFolders,
+    mergeDatabaseFolders 
+  } = foldersHook;
   
   const chatHistoryHook = useChatHistory(refreshFolders);
   const { 
@@ -244,6 +252,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   
   const { syncStatus, progress } = useDatabaseSync({
     mergeDatabaseChats: chatHistoryHook.mergeDatabaseChats,
+    mergeDatabaseFolders: mergeDatabaseFolders,
     refreshFolders: refreshFolders
   });
 
