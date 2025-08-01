@@ -297,7 +297,7 @@ export function cleanupUserDataOnLogout(): void {
         const getLocalChatCountInFolder = (folderId: string): number => {
           try {
             const chatsStr = localStorage.getItem('chats');
-            if (!chatsStr) return 0;
+            if (!chatsStr) {return 0;}
             
             const chats = JSON.parse(chatsStr);
             return chats.filter((chat: any) => 

@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     description: 'Explore all available AI models on AkashChat. Chat with leading open source AI models powered by the Akash Supercloud.',
     images: ['/og-image.png']
   },
-  keywords: ['AI models', 'language models', 'Akash Network', 'LLM', 'machine learning', 'open source AI'],
+  keywords: ['free AI models', 'free to try AI', 'free LLM', 'free AI chat', 'AI models', 'language models', 'Akash Network', 'LLM', 'machine learning', 'open source AI', 'no cost AI models', 'try AI for free'],
   authors: [{ name: 'Akash Network', url: 'https://akash.network' }],
   creator: 'Akash Network',
   publisher: 'Akash Network',

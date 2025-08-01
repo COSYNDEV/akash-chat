@@ -3,22 +3,19 @@
 import { motion } from "framer-motion";
 import { ArrowRight, Gauge, Info, MessageCircle, Layers, Settings } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 
-import { models, Model } from "@/app/config/models";
+import { Model } from "@/app/config/models";
 import { useChatContext } from "@/app/context/ChatContext";
 import { ModelConfig } from '@/components/model-config';
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface ModelDetailClientProps {
-  modelId: string;
-  model?: Model;
+  model: Model;
 }
 
-export function ModelDetailClient({ modelId, model: serverModel }: ModelDetailClientProps) {
-  const router = useRouter();
+export function ModelDetailClient({ model }: ModelDetailClientProps) {
   const {
     setModelSelection,
     handleNewChat,
@@ -30,9 +27,6 @@ export function ModelDetailClient({ modelId, model: serverModel }: ModelDetailCl
     setTopP,
     modelSelection
   } = useChatContext();
-
-  // Use the model passed from the server if available, otherwise find it
-  const model = serverModel || models.find(m => m.id.toLowerCase() === modelId.toLowerCase());
 
   // If model not found, show error state
   if (!model) {
@@ -51,13 +45,12 @@ export function ModelDetailClient({ modelId, model: serverModel }: ModelDetailCl
     );
   }
 
-  // Function to start a chat with this model
-  const startChat = () => {
+  // Function to handle chat setup when starting a chat
+  const handleStartChat = () => {
     if (!model.available) {return;}
 
     setModelSelection(model.id);
     handleNewChat();
-    router.push(`/models/${model.id}/chat`);
   };
 
   return (
@@ -65,19 +58,6 @@ export function ModelDetailClient({ modelId, model: serverModel }: ModelDetailCl
       <div className="flex-1 overflow-auto bg-background dark:bg-background">
         <div className="max-w-4xl mx-auto px-4">
           {/* Skip the header if it's already rendered on the server */}
-          {!serverModel && (
-            <motion.div
-              className="mb-8"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              <h1 className="text-3xl font-bold mb-2">{model.name}</h1>
-              <p className="text-muted-foreground">
-                {model.description || "An AI language model for chat and text generation."}
-              </p>
-            </motion.div>
-          )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             {/* Model Card */}
@@ -149,15 +129,21 @@ export function ModelDetailClient({ modelId, model: serverModel }: ModelDetailCl
 
               <div className="space-y-3">
                 <Button
-                  onClick={startChat}
+                  asChild
                   className={cn(
                     "w-full text-md flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-6",
                     !model.available && "opacity-50 cursor-not-allowed"
                   )}
                   disabled={!model.available}
                 >
-                  Start Chat
-                  <MessageCircle className="h-5 w-5 ml-1" />
+                  <Link 
+                    href={`/models/${model.id}/chat`}
+                    onClick={handleStartChat}
+                    className={!model.available ? "pointer-events-none" : ""}
+                  >
+                    Start Chat
+                    <MessageCircle className="h-5 w-5 ml-1" />
+                  </Link>
                 </Button>
                 {model.deployUrl && (
                   <Button

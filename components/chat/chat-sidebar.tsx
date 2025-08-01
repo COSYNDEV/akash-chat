@@ -52,6 +52,8 @@ interface ChatSidebarProps {
   shortcuts?: KeyboardShortcut[];
   user?: any;
   forceUpdateCounter?: number;
+  isShortcutsModalOpen?: boolean;
+  setIsShortcutsModalOpen?: (open: boolean) => void;
 }
 
 export function ChatSidebar({
@@ -77,6 +79,8 @@ export function ChatSidebar({
   shortcuts,
   user,
   forceUpdateCounter,
+  isShortcutsModalOpen,
+  setIsShortcutsModalOpen,
 }: ChatSidebarProps) {
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
@@ -924,6 +928,8 @@ export function ChatSidebar({
                 {!isMobile && (
                   <KeyboardShortcutsModal 
                     shortcuts={shortcuts || []} 
+                    isOpen={isShortcutsModalOpen}
+                    onOpenChange={setIsShortcutsModalOpen}
                     trigger={
                       <Button
                         variant="ghost"

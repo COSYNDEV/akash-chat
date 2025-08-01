@@ -3,9 +3,8 @@ import { notFound } from 'next/navigation';
 
 import { models } from '@/app/config/models';
 import { ModelDetailClient } from '@/components/models/model-detail-client';
+import { getAvailableModels } from '@/lib/models';
 
-// This function will be executed at build time for static pages
-// and at request time for dynamic pages
 export async function generateStaticParams() {
   return models.map(model => ({
     modelId: model.id,
@@ -51,7 +50,7 @@ export async function generateMetadata(props: {
     alternates: {
       canonical: `/models/${modelId}/`,
     },
-    keywords: ['AI model', model.name, 'language model', 'Akash Network', 'LLM', 'machine learning', 'chat model', 'AI conversation', model.hf_repo || '', model.architecture || '', model.parameters + ' parameters', model.tokenLimit?.toString() + ' context length' || ''],
+    keywords: ['free AI model', 'free LLM', 'free AI chat', model.name, 'AI model', 'language model', 'Akash Network', 'LLM', 'machine learning', 'chat model', 'AI conversation', 'no cost AI', 'open source AI', model.hf_repo || '', model.architecture || '', model.parameters + ' parameters', model.tokenLimit?.toString() + ' context length' || ''],
   };
 }
 
@@ -59,7 +58,8 @@ export default async function ModelIntroPage(props: {
   params: Promise<{ modelId: string }>
 }) {
   const { modelId } = await props.params;
-  const model = models.find(m => m.id.toLowerCase() === modelId.toLowerCase());
+  const allModels = await getAvailableModels();
+  const model = allModels.find(m => m.id.toLowerCase() === modelId.toLowerCase());
   
   // If model not found, show 404 page
   if (!model) {
@@ -129,7 +129,7 @@ export default async function ModelIntroPage(props: {
       </article>
       
       {/* Client component for interactive elements */}
-      <ModelDetailClient modelId={modelId} model={model} />
+      <ModelDetailClient model={model} />
     </>
   );
 } 

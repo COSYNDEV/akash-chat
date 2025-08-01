@@ -17,7 +17,6 @@ import { ChatHistory, ChatSidebar } from '@/components/chat/chat-sidebar';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { KeyboardShortcutsModal } from "@/components/ui/keyboard-shortcuts-modal";
 import { Folder } from '@/hooks/use-folders';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { cn } from '@/lib/utils';
@@ -114,6 +113,7 @@ export function MainLayout({
 }: MainLayoutProps) {
   // State to track when loading should end (with delay)
   const [shouldShowLoader, setShouldShowLoader] = useState(true);
+  const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
 
   const { width: windowWidth } = useWindowSize();
   const isMobile = windowWidth ? windowWidth < 768 : false;
@@ -122,6 +122,22 @@ export function MainLayout({
 
   // Get sync status from ChatContext
   const { syncStatus } = useChatContext();
+
+  // Handle Ctrl+Shift+? to open the shortcuts modal
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === '?' && (event.ctrlKey || event.metaKey) && event.shiftKey) {
+        event.preventDefault();
+        // Only open if not already open
+        if (!isShortcutsModalOpen) {
+          setIsShortcutsModalOpen(true);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isShortcutsModalOpen]);
 
   // Onboarding enforcement
   useEffect(() => {
@@ -486,6 +502,8 @@ export function MainLayout({
                 shortcuts={shortcuts}
                 user={user}
                 forceUpdateCounter={forceUpdateCounter}
+                isShortcutsModalOpen={isShortcutsModalOpen}
+                setIsShortcutsModalOpen={setIsShortcutsModalOpen}
               />
             </div>
 
@@ -500,9 +518,6 @@ export function MainLayout({
           </div>
         </div>
       </DndProvider>
-      
-      {/* Keyboard Shortcuts Modal */}
-      <KeyboardShortcutsModal shortcuts={shortcuts} />
 
     </>
   );

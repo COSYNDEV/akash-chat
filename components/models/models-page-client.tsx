@@ -1,7 +1,7 @@
 'use client';
 
 import { Gauge, Info, Layers, Settings } from "lucide-react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 import { Model } from "@/app/config/models";
 import { useChatContext } from "@/app/context/ChatContext";
@@ -17,12 +17,10 @@ export function ModelsPageClient({ models }: ModelsPageClientProps) {
     const {
         setModelSelection,
     } = useChatContext();
-    const router = useRouter();
 
     const handleModelClick = (model: Model) => {
         // All models passed from server are available
         setModelSelection(model.id);
-        router.push('/models/' + model.id);
     };
 
     return (
@@ -38,8 +36,9 @@ export function ModelsPageClient({ models }: ModelsPageClientProps) {
                 {/* Models Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {models.map((model: Model) => (
-                        <div
+                        <Link
                             key={model.id}
+                            href={`/models/${model.id}`}
                             onClick={() => handleModelClick(model)}
                             className={cn(
                                 "group/card rounded-lg border cursor-pointer bg-background text-foreground",
@@ -106,7 +105,7 @@ export function ModelsPageClient({ models }: ModelsPageClientProps) {
                                 </div>
                             </div>
 
-                        </div>
+                        </Link>
                     ))}
                 </div>
             </div>

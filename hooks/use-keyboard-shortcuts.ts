@@ -69,14 +69,6 @@ export function useKeyboardShortcuts(config: KeyboardShortcutsConfig) {
         disabled: !config.newChat,
       },
       {
-        key: 'Enter',
-        description: 'Send message (when focused on input)',
-        category: 'Chat',
-        action: config.sendMessage || (() => {}),
-        ctrlKey: true,
-        disabled: !config.sendMessage,
-      },
-      {
         key: 'Escape',
         description: 'Stop generation',
         category: 'Chat',
