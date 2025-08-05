@@ -3,7 +3,6 @@
 import { motion } from "framer-motion";
 import { ArrowRight, Gauge, Info, MessageCircle, Layers, Settings } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 
 import { models, Model } from "@/app/config/models";
@@ -18,7 +17,6 @@ interface ModelDetailClientProps {
 }
 
 export function ModelDetailClient({ modelId, model: serverModel }: ModelDetailClientProps) {
-  const router = useRouter();
   const {
     setModelSelection,
     handleNewChat,
@@ -50,15 +48,6 @@ export function ModelDetailClient({ modelId, model: serverModel }: ModelDetailCl
       </div>
     );
   }
-
-  // Function to start a chat with this model
-  const startChat = () => {
-    if (!model.available) {return;}
-
-    setModelSelection(model.id);
-    handleNewChat();
-    router.push(`/models/${model.id}/chat`);
-  };
 
   return (
     <>
@@ -149,15 +138,23 @@ export function ModelDetailClient({ modelId, model: serverModel }: ModelDetailCl
 
               <div className="space-y-3">
                 <Button
-                  onClick={startChat}
+                  asChild
                   className={cn(
                     "w-full text-md flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-6",
-                    !model.available && "opacity-50 cursor-not-allowed"
+                    !model.available && "opacity-50"
                   )}
-                  disabled={!model.available}
                 >
-                  Start Chat
-                  <MessageCircle className="h-5 w-5 ml-1" />
+                  <Link 
+                    href={`/models/${model.id}/chat`}
+                    onClick={model.available ? () => {
+                      setModelSelection(model.id);
+                      handleNewChat();
+                    } : undefined}
+                    aria-label={model.available ? "Start chat with this model" : "Model currently unavailable"}
+                  >
+                    Start Chat
+                    <MessageCircle className="h-5 w-5 ml-1" />
+                  </Link>
                 </Button>
                 {model.deployUrl && (
                   <Button

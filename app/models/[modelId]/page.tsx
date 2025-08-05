@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 
 import { models } from '@/app/config/models';
 import { ModelDetailClient } from '@/components/models/model-detail-client';
+import { getAvailableModels } from '@/lib/models';
 
 // This function will be executed at build time for static pages
 // and at request time for dynamic pages
@@ -51,7 +52,7 @@ export async function generateMetadata(props: {
     alternates: {
       canonical: `/models/${modelId}/`,
     },
-    keywords: ['AI model', model.name, 'language model', 'Akash Network', 'LLM', 'machine learning', 'chat model', 'AI conversation', model.hf_repo || '', model.architecture || '', model.parameters + ' parameters', model.tokenLimit?.toString() + ' context length' || ''],
+    keywords: ['AI model', model.name, 'language model', 'Akash Network', 'LLM', 'machine learning', 'chat model', 'AI conversation', 'free AI', 'free chat AI', 'free AI model', 'decentralized AI', model.hf_repo || '', model.architecture || '', model.parameters + ' parameters', model.tokenLimit?.toString() + ' context length' || ''],
   };
 }
 
@@ -59,7 +60,16 @@ export default async function ModelIntroPage(props: {
   params: Promise<{ modelId: string }>
 }) {
   const { modelId } = await props.params;
-  const model = models.find(m => m.id.toLowerCase() === modelId.toLowerCase());
+  
+  let model;
+  try {
+    const availableModels = await getAvailableModels();
+    model = availableModels.find(m => m.id.toLowerCase() === modelId.toLowerCase());
+  } catch (error) {
+    console.error('Error fetching available models:', error);
+    // Fallback to static models array
+    model = models.find(m => m.id.toLowerCase() === modelId.toLowerCase());
+  }
   
   // If model not found, show 404 page
   if (!model) {
@@ -89,6 +99,7 @@ export default async function ModelIntroPage(props: {
           <div itemProp="offers" itemScope itemType="https://schema.org/Offer">
             <meta itemProp="price" content="0" />
             <meta itemProp="priceCurrency" content="USD" />
+            <meta itemProp="availability" content="https://schema.org/InStock" />
           </div>
         </div>
 
