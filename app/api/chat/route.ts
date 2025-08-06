@@ -15,11 +15,78 @@ if (!apiKey) {
   throw new Error('API_KEY is not set in environment variables');
 }
 
-// Create custom OpenAI provider instance
+// Create custom OpenAI provider instance with reasoning injection
 const openai = createOpenAI({
   baseURL: apiEndpoint,
   apiKey: apiKey,
-  compatibility: 'compatible'
+  compatibility: 'compatible',
+  // Inject reasoning content into the stream
+  fetch: async (url, options) => {
+    const response = await fetch(url, options);
+    
+    // Only process streaming responses
+    if (response.headers.get('content-type')?.includes('text/event-stream')) {
+      let reasoningBuffer = '';
+      let isFirstContent = true;
+      
+      const transformStream = new TransformStream({
+        transform(chunk, controller) {
+          const chunkText = new TextDecoder().decode(chunk);
+          const lines = chunkText.split('\n');
+          const modifiedLines: string[] = [];
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+              try {
+                const data = JSON.parse(line.slice(6));
+                
+                // Capture reasoning content
+                if (data.choices?.[0]?.delta?.reasoning_content) {
+                  reasoningBuffer += data.choices[0].delta.reasoning_content;
+                }
+                
+                // Inject reasoning before first content
+                if (data.choices?.[0]?.delta?.content && isFirstContent && reasoningBuffer) {
+                  isFirstContent = false;
+                  
+                  const reasoningChunk = {
+                    ...data,
+                    choices: [{
+                      ...data.choices[0],
+                      delta: {
+                        content: `<think>\n${reasoningBuffer}\n</think>\n\n`,
+                        role: data.choices[0].delta.role
+                      }
+                    }]
+                  };
+                  
+                  modifiedLines.push(`data: ${JSON.stringify(reasoningChunk)}`);
+                  modifiedLines.push('');
+                }
+                
+                modifiedLines.push(line);
+                
+              } catch (e) {
+                modifiedLines.push(line);
+              }
+            } else {
+              modifiedLines.push(line);
+            }
+          }
+          
+          controller.enqueue(new TextEncoder().encode(modifiedLines.join('\n')));
+        }
+      });
+      
+      return new Response(response.body?.pipeThrough(transformStream), {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers
+      });
+    }
+    
+    return response;
+  }
 });
 
 // Define the handler function to be wrapped with authentication
@@ -168,6 +235,7 @@ async function handlePostRequest(req: Request) {
         system: systemToUse,
         temperature: temperature || selectedModel?.temperature,
         topP: topP || selectedModel?.top_p,
+
       });
       result.mergeIntoDataStream(dataStream);
     },
