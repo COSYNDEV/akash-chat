@@ -36,6 +36,7 @@ GPT-OSS-120B features configurable reasoning levels (Low, Medium, High) and supp
 * 🌐 Decentralized hosting for lower costs & full control
 * 🔍 Optimized for reasoning, agentic tasks, and tool use`,
     thumbnailId: 'llama-3',
+    deployUrl: 'https://console.akash.network/templates/akash-network-awesome-akash-openai-gpt-oss-120b'
   },
   {
     id: 'Kimi-K2-Instruct',
@@ -341,5 +342,5 @@ With 405 billion parameters, this model excels at deep understanding, long-conte
 ];
 
 // in case the `DEFAULT_MODEL` environment variable is not set or set to an unsupported model
-export const fallbackModelID = 'Qwen3-235B-A22B-Instruct-2507-FP8';
+export const fallbackModelID = 'openai-gpt-oss-120b';
 export const defaultModel = process.env.DEFAULT_MODEL || fallbackModelID; 
