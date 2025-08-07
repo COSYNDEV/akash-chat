@@ -329,6 +329,7 @@ With 405 billion parameters, this model excels at deep understanding, long-conte
     id: 'AkashGen',
     name: 'AkashGen',
     description: 'Generate images using AkashGen',
+    available: true,
     temperature: 0.85,
     top_p: 1,
     tokenLimit: 12000,
