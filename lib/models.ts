@@ -20,8 +20,6 @@ export async function getAvailableModels(): Promise<Model[]> {
             }
         });
         const apiModels = await response.json();
-        const isProxy = apiModels.data.some((apiModel: OpenAI.Model) => apiModel.owned_by === 'proxy');
-        const isChatApi = apiEndpoint.includes('chatapi.akash.network');
         
         // For predefined models, check if they're available in the API or explicitly marked as available
         const availableFromConfig = models.map(model => ({
@@ -33,7 +31,7 @@ export async function getAvailableModels(): Promise<Model[]> {
         // Only include them if it's a proxy or chatapi (user's custom setup)
         const additionalModels = apiModels.data
             .filter((apiModel: OpenAI.Model) => 
-                !models.some(model => model.id === apiModel.id) && (isProxy || isChatApi))
+                !models.some(model => model.id === apiModel.id))
             .map((apiModel: OpenAI.Model) => ({
                 id: apiModel.id,
                 name: apiModel.id.split('/').pop() || apiModel.id,
