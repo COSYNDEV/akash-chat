@@ -29,9 +29,9 @@ export async function getAvailableModels(): Promise<Model[]> {
             // Check if the model is available using either the config ID or the mapped API ID
             const isAvailableInApi = apiModels.data.some((apiModel: OpenAI.Model) => {
                 // Direct match with config ID
-                if (apiModel.id === model.id) return true;
+                if (apiModel.id === model.id) {return true;}
                 // Match with mapped API ID
-                if (model.apiId && apiModel.id === model.apiId) return true;
+                if (model.apiId && apiModel.id === model.apiId) {return true;}
                 return false;
             });
             
@@ -46,9 +46,9 @@ export async function getAvailableModels(): Promise<Model[]> {
         const additionalModels = apiModels.data
             .filter((apiModel: OpenAI.Model) => {
                 // Skip if this API model ID maps to a config model
-                if (apiToConfigIdMap.has(apiModel.id)) return false;
+                if (apiToConfigIdMap.has(apiModel.id)) {return false;}
                 // Skip if we already have a direct match
-                if (models.some(model => model.id === apiModel.id)) return false;
+                if (models.some(model => model.id === apiModel.id)) {return false;}
                 return true;
             })
             .map((apiModel: OpenAI.Model) => ({
