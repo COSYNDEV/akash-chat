@@ -9,10 +9,10 @@ const MODELS_CACHE_TTL = 600; // Cache for 10 minutes
 
 export async function getAvailableModels(): Promise<Model[]> {
     try {
-        /*const cachedModels = await redis.get(MODELS_CACHE_KEY);
+        const cachedModels = await redis.get(MODELS_CACHE_KEY);
         if (cachedModels) {
             return JSON.parse(cachedModels);
-        }*/
+        }
 
         const response = await fetch(apiEndpoint + '/models', {
             headers: {
