@@ -4,7 +4,7 @@ import cl100k_base from "tiktoken/encoders/cl100k_base.json";
 import { Tiktoken } from "tiktoken/lite";
 
 import { apiEndpoint, apiKey, imgGenFnModel, DEFAULT_SYSTEM_PROMPT } from '@/app/config/api';
-import { defaultModel, models } from '@/app/config/models';
+import { defaultModel, models, createConfigToApiIdMap } from '@/app/config/models';
 import { withAuth } from '@/lib/auth';
 import { getAvailableModels } from '@/lib/models';
 import { generateImageTool } from '@/lib/tools';
@@ -229,8 +229,13 @@ async function handlePostRequest(req: Request) {
   return createDataStreamResponse({
     execute: dataStream => {
       const systemToUse = system || DEFAULT_SYSTEM_PROMPT;
+      
+      // Map config model ID to API model ID if needed
+      const configToApiIdMap = createConfigToApiIdMap();
+      const apiModelId = configToApiIdMap.get(model || defaultModel) || model || defaultModel;
+
       const result = streamText({
-        model: openai(model || defaultModel),
+        model: openai(apiModelId),
         messages: messagesToSend,
         system: systemToUse,
         temperature: temperature || selectedModel?.temperature,
@@ -240,6 +245,7 @@ async function handlePostRequest(req: Request) {
       result.mergeIntoDataStream(dataStream);
     },
     onError: error => {
+      console.log('error', error);
       // Handle specific OpenAI errors
       if (error instanceof Error) {
         if (error.name === 'OpenAIError') {
