@@ -5,14 +5,15 @@ import { ArrowRight, Gauge, Info, MessageCircle, Layers, Settings } from "lucide
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 
-import { Model } from "@/app/config/models";
+import { models, Model } from "@/app/config/models";
 import { useChatContext } from "@/app/context/ChatContext";
 import { ModelConfig } from '@/components/model-config';
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface ModelDetailClientProps {
-  model: Model;
+  modelId: string;
+  model?: Model;
 }
 
 export function ModelDetailClient({ modelId, model: serverModel }: ModelDetailClientProps) {
@@ -27,6 +28,8 @@ export function ModelDetailClient({ modelId, model: serverModel }: ModelDetailCl
     setTopP,
     modelSelection
   } = useChatContext();
+
+  const model = serverModel || models.find(m => m.id.toLowerCase() === modelId.toLowerCase());
 
   // If model not found, show error state
   if (!model) {
@@ -50,6 +53,19 @@ export function ModelDetailClient({ modelId, model: serverModel }: ModelDetailCl
       <div className="flex-1 overflow-auto bg-background dark:bg-background">
         <div className="max-w-4xl mx-auto px-4">
           {/* Skip the header if it's already rendered on the server */}
+          {!serverModel && (
+            <motion.div
+              className="mb-8"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <h1 className="text-3xl font-bold mb-2">{model.name}</h1>
+              <p className="text-muted-foreground">
+                {model.description || "An AI language model for chat and text generation."}
+              </p>
+            </motion.div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             {/* Model Card */}

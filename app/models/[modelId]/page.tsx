@@ -138,7 +138,7 @@ export default async function ModelIntroPage(props: {
       </article>
       
       {/* Client component for interactive elements */}
-      <ModelDetailClient model={model} />
+      <ModelDetailClient modelId={modelId} model={model} />
     </>
   );
 } 
