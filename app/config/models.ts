@@ -18,6 +18,26 @@ export interface Model {
 
 export const models: Model[] = [
   {
+    id: 'openai-gpt-oss-120b',
+    name: 'GPT-OSS-120B',
+    description: 'Efficient reasoning model with 117B parameters (5.1B active)',
+    temperature: 0.6,
+    top_p: 0.95,
+    tokenLimit: 128000,
+    parameters: '117B (5.1B active)',
+    architecture: 'Transformer with native MXFP4 quantization',
+    hf_repo: 'openai/gpt-oss-120b',
+    aboutContent: `Experience **GPT-OSS-120B**, OpenAI's open-source reasoning model with 117B total parameters and 5.1B active parameters. Built with native MXFP4 quantization, this model is designed for powerful reasoning, agentic tasks, and versatile developer use cases.
+
+GPT-OSS-120B features configurable reasoning levels (Low, Medium, High) and supports advanced capabilities like tool use, web browsing, and function calling. Optimized to run efficiently on a single H100 GPU while delivering high-quality reasoning performance.`,
+    infoContent: `
+* ⚡ Open-source reasoning model with configurable reasoning levels
+* 🧠 117B parameters (5.1B active) with native MXFP4 quantization
+* 🌐 Decentralized hosting for lower costs & full control
+* 🔍 Optimized for reasoning, agentic tasks, and tool use`,
+    thumbnailId: 'llama-3',
+  },
+  {
     id: 'Kimi-K2-Instruct',
     name: 'Kimi K2 Instruct',
     description: 'Advanced 1T Mixture-of-Experts model (32B active)',

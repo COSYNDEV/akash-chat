@@ -620,8 +620,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // fetch models once on initialization
   useEffect(() => {
-    if (!sessionInitialized) {return;}
-    
     const fetchModels = async () => {
       try {
         setIsLoadingModels(true);
@@ -650,14 +648,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } catch (error) {
         setModelError('Unable to load chat models. Please try again later.');
+        // Fallback to default models for model pages
+        setAvailableModels(defaultModels.map(model => ({
+          ...model,
+          available: true
+        })));
       } finally {
         setIsLoadingModels(false);
       }
     };
     
     fetchModels();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionInitialized]);
+  }, []); 
 
   useEffect(() => {
     const model = availableModels.find((m: Model) => m.id === modelSelection);

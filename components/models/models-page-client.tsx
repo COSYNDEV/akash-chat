@@ -19,7 +19,7 @@ export function ModelsPageClient({ models }: ModelsPageClientProps) {
     } = useChatContext();
 
     const handleModelClick = (model: Model) => {
-        // All models passed from server are available
+        // Set model selection when clicking
         setModelSelection(model.id);
     };
 
@@ -44,7 +44,7 @@ export function ModelsPageClient({ models }: ModelsPageClientProps) {
                                 "group/card rounded-lg border cursor-pointer bg-background text-foreground",
                                 "outline outline-2 -outline-offset-2 outline-primary/0 transition-all",
                                 "hover:shadow-lg hover:outline-primary/30 hover:translate-y-[-2px] focus-visible:outline-primary",
-                                "flex h-full flex-col animate-fade-in relative"
+                                "flex h-full flex-col animate-fade-in relative no-underline"
                             )}
                         >
                             <div className="p-4 pt-4 h-[9.5rem] overflow-hidden">

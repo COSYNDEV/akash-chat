@@ -15,7 +15,7 @@ interface ModelDetailClientProps {
   model: Model;
 }
 
-export function ModelDetailClient({ model }: ModelDetailClientProps) {
+export function ModelDetailClient({ modelId, model: serverModel }: ModelDetailClientProps) {
   const {
     setModelSelection,
     handleNewChat,
@@ -44,14 +44,6 @@ export function ModelDetailClient({ model }: ModelDetailClientProps) {
       </div>
     );
   }
-
-  // Function to handle chat setup when starting a chat
-  const handleStartChat = () => {
-    if (!model.available) {return;}
-
-    setModelSelection(model.id);
-    handleNewChat();
-  };
 
   return (
     <>
@@ -132,14 +124,16 @@ export function ModelDetailClient({ model }: ModelDetailClientProps) {
                   asChild
                   className={cn(
                     "w-full text-md flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-6",
-                    !model.available && "opacity-50 cursor-not-allowed"
+                    !model.available && "opacity-50"
                   )}
-                  disabled={!model.available}
                 >
                   <Link 
                     href={`/models/${model.id}/chat`}
-                    onClick={handleStartChat}
-                    className={!model.available ? "pointer-events-none" : ""}
+                    onClick={model.available ? () => {
+                      setModelSelection(model.id);
+                      handleNewChat();
+                    } : undefined}
+                    aria-label={model.available ? "Start chat with this model" : "Model currently unavailable"}
                   >
                     Start Chat
                     <MessageCircle className="h-5 w-5 ml-1" />
