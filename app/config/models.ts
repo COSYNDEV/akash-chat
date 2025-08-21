@@ -20,6 +20,28 @@ export interface Model {
 
 export const models: Model[] = [
   {
+    id: 'DeepSeek-V3.1',
+    name: 'DeepSeek V3.1',
+    apiId: 'deepseek-ai/DeepSeek-V3.1',
+    description: 'Next-generation reasoning model with enhanced capabilities',
+    temperature: 0.6,
+    top_p: 0.95,
+    tokenLimit: 64000,
+    parameters: '685B',
+    architecture: 'Mixture-of-Experts',
+    hf_repo: 'deepseek-ai/DeepSeek-V3.1',
+    aboutContent: `Discover **DeepSeek V3.1**, the latest advancement in DeepSeek's flagship model series. This state-of-the-art 685B parameter Mixture-of-Experts (MoE) architecture delivers exceptional performance across reasoning, coding, mathematics, and general intelligence tasks.
+
+DeepSeek V3.1 features improved training methodologies, enhanced reasoning capabilities, and superior instruction following. With its advanced architecture and extensive knowledge base, it excels at complex problem-solving, creative tasks, and professional applications requiring deep understanding and analytical thinking.`,
+    infoContent: `
+* ⚡ Cutting-edge DeepSeek V3.1 with 685B parameters
+* 🧠 Advanced MoE architecture for superior reasoning and problem-solving
+* 🌐 Decentralized hosting for cost-effective, unrestricted access
+* 🔍 Optimized for coding, mathematics, reasoning, and creative tasks`,
+    thumbnailId: 'deepseek',
+    deployUrl: 'https://console.akash.network/templates/akash-network-awesome-akash-DeepSeek-V3.1'
+  },
+  {
     id: 'openai-gpt-oss-120b',
     name: 'GPT-OSS-120B',
     apiId: 'openai/gpt-oss-120b',
@@ -350,7 +372,7 @@ With 405 billion parameters, this model excels at deep understanding, long-conte
 ];
 
 // in case the `DEFAULT_MODEL` environment variable is not set or set to an unsupported model
-export const fallbackModelID = 'openai-gpt-oss-120b';
+export const fallbackModelID = 'DeepSeek-V3.1';
 export const defaultModel = process.env.DEFAULT_MODEL || fallbackModelID;
 
 /**
