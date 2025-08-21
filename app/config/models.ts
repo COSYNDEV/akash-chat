@@ -39,7 +39,7 @@ DeepSeek V3.1 features improved training methodologies, enhanced reasoning capab
 * 🌐 Decentralized hosting for cost-effective, unrestricted access
 * 🔍 Optimized for coding, mathematics, reasoning, and creative tasks`,
     thumbnailId: 'deepseek',
-    deployUrl: 'https://console.akash.network/templates/akash-network-awesome-akash-DeepSeek-V3.1'
+    //deployUrl: 'https://console.akash.network/templates/akash-network-awesome-akash-DeepSeek-V3.1'
   },
   {
     id: 'openai-gpt-oss-120b',
