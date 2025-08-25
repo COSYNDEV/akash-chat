@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { getCookie, setCookie } from '@/lib/cookies';
 
 import { CookiePreferences } from './cookie-preferences';
 
@@ -12,14 +13,16 @@ export function CookieBanner() {
   const [showDetails, setShowDetails] = useState(false);
 
   useEffect(() => {
-    const consent = localStorage.getItem('cookie-consent');
+    const consent = getCookie('cookie-consent');
     if (!consent) {
       setShowBanner(true);
     }
   }, []);
 
   const handleConsent = (accepted: boolean) => {
-    localStorage.setItem('cookie-consent', accepted ? 'accepted' : 'declined');
+    setCookie('cookie-consent', accepted ? 'accepted' : 'declined', {
+      days: accepted ? 365 : 1  // Declined consent expires after 1 day, accepted after 1 year
+    });
     
     if (!accepted) {
       // Disable Google Analytics if it was loaded
@@ -110,7 +113,7 @@ export function getCookieConsent(): 'accepted' | 'declined' | null {
   if (typeof window === 'undefined') {
     return null;
   }
-  const consent = localStorage.getItem('cookie-consent');
+  const consent = getCookie('cookie-consent');
   return consent as 'accepted' | 'declined' | null;
 }
 

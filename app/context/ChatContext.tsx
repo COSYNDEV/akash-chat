@@ -358,7 +358,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
               name: availableModels.find((m: Model) => m.id === modelSelection)?.name || modelSelection,
             }, systemPrompt);
         setSelectedChat(chatId);
-        setIsPrivateMode(false); // Reset private mode after creating chat
       } else {
         // Existing chat - immediately save to database after model completion
         updateChat(selectedChat, allMessages);

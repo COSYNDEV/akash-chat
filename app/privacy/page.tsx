@@ -189,18 +189,25 @@ export default function PrivacyPage() {
               <h2 className="text-2xl font-semibold text-primary mb-4">Cookies and Tracking</h2>
               
               <h3 className="text-xl font-semibold text-primary mb-3">Essential Cookies</h3>
-              <p className="text-muted-foreground leading-relaxed mb-3">We use minimal cookies for:</p>
+              <p className="text-muted-foreground leading-relaxed mb-3">We use minimal cookies for essential functionality:</p>
               <ul className="space-y-2 text-muted-foreground mb-4">
                 <li className="flex items-start"><span className="mr-2">•</span><span>Session management and authentication</span></li>
                 <li className="flex items-start"><span className="mr-2">•</span><span>Theme preferences (dark/light mode)</span></li>
                 <li className="flex items-start"><span className="mr-2">•</span><span>Essential application functionality</span></li>
               </ul>
 
-              <h3 className="text-xl font-semibold text-primary mb-3">Analytics</h3>
+              <h3 className="text-xl font-semibold text-primary mb-3">Cookie Types</h3>
+              <ul className="space-y-2 text-muted-foreground mb-4">
+                <li className="flex items-start"><span className="mr-2">•</span><span>Functional cookies for terms acceptance and consent preferences</span></li>
+                <li className="flex items-start"><span className="mr-2">•</span><span>You can manage preferences through our cookie banner</span></li>
+              </ul>
+
+              <h3 className="text-xl font-semibold text-primary mb-3">Analytics (Optional)</h3>
               <ul className="space-y-2 text-muted-foreground">
-                <li className="flex items-start"><span className="mr-2">•</span><span>Limited Google Analytics for understanding feature usage</span></li>
+                <li className="flex items-start"><span className="mr-2">•</span><span>Limited Google Analytics for understanding feature usage (only with consent)</span></li>
                 <li className="flex items-start"><span className="mr-2">•</span><span>No personal information is included in analytics</span></li>
                 <li className="flex items-start"><span className="mr-2">•</span><span>No social media tracking pixels or advertisement tracking</span></li>
+                <li className="flex items-start"><span className="mr-2">•</span><span>Analytics cookies can be declined without affecting core functionality</span></li>
               </ul>
             </section>
 
