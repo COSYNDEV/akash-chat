@@ -5,6 +5,11 @@ import { models } from '@/app/config/models';
 import { ModelDetailClient } from '@/components/models/model-detail-client';
 import { getAvailableModels } from '@/lib/models';
 
+// Revalidate every 10 minutes like the main models page
+export const revalidate = 600;
+
+// Generate static params for all models in the config
+// This ensures all model pages are pre-built at build time
 export async function generateStaticParams() {
   return models.map(model => ({
     modelId: model.id,
@@ -59,19 +64,23 @@ export default async function ModelIntroPage(props: {
 }) {
   const { modelId } = await props.params;
   
-  let model;
-  try {
-    const availableModels = await getAvailableModels();
-    model = availableModels.find(m => m.id.toLowerCase() === modelId.toLowerCase());
-  } catch (error) {
-    console.error('Error fetching available models:', error);
-    // Fallback to static models array
-    model = models.find(m => m.id.toLowerCase() === modelId.toLowerCase());
+  // First check if model exists in static config
+  const staticModel = models.find(m => m.id.toLowerCase() === modelId.toLowerCase());
+  if (!staticModel) {
+    notFound();
   }
   
-  // If model not found, show 404 page
-  if (!model) {
-    notFound();
+  // Try to get live availability data, but don't fail if unavailable
+  let model = staticModel;
+  try {
+    const availableModels = await getAvailableModels();
+    const liveModel = availableModels.find(m => m.id.toLowerCase() === modelId.toLowerCase());
+    if (liveModel) {
+      model = liveModel;
+    }
+  } catch (error) {
+    console.error('Error fetching available models, using static data:', error);
+    // Continue with static model
   }
 
   return (

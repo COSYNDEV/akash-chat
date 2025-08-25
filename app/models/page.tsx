@@ -32,8 +32,12 @@ export const metadata: Metadata = {
   publisher: 'Akash Network',
 };
 
+// Revalidate every 10 minutes (600 seconds)
+export const revalidate = 600;
+
 export default async function ModelsPage() {
   const models = await getAvailableModels();
+  const availableModels = models.filter(model => model.available);
   
-  return <ModelsPageClient models={models} />;
+  return <ModelsPageClient models={availableModels} />;
 } 
