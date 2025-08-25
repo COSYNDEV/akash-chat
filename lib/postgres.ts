@@ -93,12 +93,3 @@ export async function withTransaction<T>(
     client.release();
   }
 }
-
-// Create a proxy object that calls the getter when accessed
-export const postgres = new Proxy({} as Pool, {
-  get(_, prop) {
-    const pool: any = getPostgresPool();
-    const value: any = (pool as any)[prop];
-    return typeof value === 'function' ? value.bind(pool) : value;
-  }
-});

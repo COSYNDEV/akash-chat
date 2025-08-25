@@ -1,44 +1,63 @@
-import { NextRequest } from 'next/server';
+import { getSession } from '@auth0/nextjs-auth0';
+import { NextRequest, NextResponse } from 'next/server';
 
-import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
+import { checkTokenLimit, getClientIP, getRateLimitConfig } from '@/lib/rate-limit';
 
 export async function GET(req: NextRequest) {
   try {
-    // Only check rate limit status for anonymous users (when ACCESS_TOKEN is not required)
+    // Check if rate limiting is disabled (ACCESS_TOKEN is required)
     const isAccessTokenRequired = process.env.ACCESS_TOKEN && process.env.ACCESS_TOKEN.trim() !== '';
     
     if (isAccessTokenRequired) {
-      // For authenticated deployments, return extended status
+      // For deployments with ACCESS_TOKEN, rate limiting is disabled
       return Response.json({
-        limit: 999999,
-        used: 0,
-        remaining: 999999,
+        usagePercentage: 0,
+        remainingPercentage: 100,
         resetTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         blocked: false,
         authenticated: true,
       });
     }
 
-    // For anonymous users, get actual rate limit status
-    const clientIP = getClientIP(req);
-    const rateLimit = await checkRateLimit(clientIP);
+    // Check authentication status
+    const session = await getSession(req, NextResponse.next());
+    const isAuthenticated = !!session?.user;
+    
+    // Determine rate limit identifier and config
+    let rateLimitIdentifier: string;
+    const rateLimitConfig = getRateLimitConfig(isAuthenticated);
+    
+    if (isAuthenticated && session?.user?.sub) {
+      // Use Auth0 user ID for authenticated users
+      rateLimitIdentifier = session.user.sub;
+    } else {
+      // Use IP for anonymous users
+      rateLimitIdentifier = getClientIP(req);
+    }
+
+    const rateLimit = await checkTokenLimit(rateLimitIdentifier, rateLimitConfig);
+
+    // Calculate usage percentage (0-100)
+    const usagePercentage = rateLimit.limit > 0 
+      ? Math.round((rateLimit.used / rateLimit.limit) * 100)
+      : 0;
+    
+    const remainingPercentage = Math.max(0, 100 - usagePercentage);
 
     return Response.json({
-      limit: rateLimit.limit,
-      used: rateLimit.used,
-      remaining: rateLimit.remaining,
+      usagePercentage,
+      remainingPercentage,
       resetTime: rateLimit.resetTime.toISOString(),
       blocked: rateLimit.blocked,
-      authenticated: false,
+      authenticated: isAuthenticated,
     });
   } catch (error) {
     console.error('Rate limit status error:', error);
     
     // Return safe fallback
     return Response.json({
-      limit: 20,
-      used: 0,
-      remaining: 20,
+      usagePercentage: 0,
+      remainingPercentage: 100,
       resetTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       blocked: false,
       authenticated: false,

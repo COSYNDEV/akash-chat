@@ -1,11 +1,6 @@
 import { getSession } from '@auth0/nextjs-auth0';
 import { NextRequest, NextResponse } from 'next/server';
 
-export interface AuthenticatedRequest extends NextRequest {
-  userId: string;
-  user: any;
-}
-
 export interface AuthMiddlewareResult {
   success: boolean;
   userId?: string;
@@ -17,7 +12,7 @@ export interface AuthMiddlewareResult {
  * Authentication middleware for API routes
  * Validates session and extracts user information
  */
-export async function withAuth(request: NextRequest): Promise<AuthMiddlewareResult> {
+export async function withAuth0Auth(request: NextRequest): Promise<AuthMiddlewareResult> {
   try {
     const session = await getSession(request, new NextResponse());
     
@@ -49,7 +44,7 @@ export function requireAuth<T extends any[]>(
   handler: (request: NextRequest, userId: string, user: any, ...args: T) => Promise<NextResponse>
 ) {
   return async (request: NextRequest, ...args: T): Promise<NextResponse> => {
-    const authResult = await withAuth(request);
+    const authResult = await withAuth0Auth(request);
     
     if (!authResult.success) {
       return authResult.error!;
@@ -57,25 +52,4 @@ export function requireAuth<T extends any[]>(
     
     return handler(request, authResult.userId!, authResult.user!, ...args);
   };
-}
-
-/**
- * Simplified authentication check for middleware chains
- */
-export async function authenticateUser(request: NextRequest): Promise<{ userId: string; user: any } | null> {
-  try {
-    const session = await getSession(request, new NextResponse());
-    
-    if (!session?.user?.sub) {
-      return null;
-    }
-
-    return {
-      userId: session.user.sub,
-      user: session.user
-    };
-  } catch (error) {
-    console.error('Authentication error:', error);
-    return null;
-  }
 }

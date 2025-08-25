@@ -15,8 +15,8 @@ export class LiteLLMService {
   private static readonly KEY_EXPIRY_HOURS = 24;
 
   /**
-   * Generate a new LiteLLM API key for a user via LiteLLM API
-   * The key is created in LiteLLM with userId as key_alias
+   * Generate a new API key for a user via Admin API
+   * First creates user on API server if needed, then creates API key
    * Requires user to have verified email and accepted marketing consent
    */
   static async generateApiKey(userId: string): Promise<string> {
@@ -25,48 +25,79 @@ export class LiteLLMService {
     if (!isVerified) {
       throw new Error('User must verify email and accept marketing consent to generate API key');
     }
-    let litellmEndpoint = process.env.API_ENDPOINT;
-    litellmEndpoint = litellmEndpoint?.replace('/v1', '');
+    
+    let apiEndpoint = process.env.API_ENDPOINT;
+    apiEndpoint = apiEndpoint?.replace('/v1', '');
     const adminKey = process.env.API_KEY;
-    const userRole = process.env.LITELLM_USER_ROLE || 'internal_user_viewer';
-    const maxParallelRequests = parseInt(process.env.LITELLM_MAX_PARALLEL_REQUESTS || '1');
-    const teamId = process.env.LITELLM_TEAM_ID || 'akashchat_user';
 
-    if (!litellmEndpoint || !adminKey) {
-      throw new Error('LiteLLM configuration missing: API_ENDPOINT and API_KEY required');
+    if (!apiEndpoint || !adminKey) {
+      throw new Error('Admin API configuration missing: API_ENDPOINT and API_KEY required');
     }
 
     try {
-      // Create user-specific API key via LiteLLM API
-      const response = await fetch(`${litellmEndpoint}/key/generate`, {
+      // Get user data from Auth0 for creating user on API server
+      const userData = await auth0Management.getUserData(userId);
+      
+      // Get admin API user ID dynamically
+      let adminApiUserId = await this.getAdminApiUserId(userId);
+      
+      // If user doesn't exist in admin API, create them
+      if (!adminApiUserId) {
+        const body = JSON.stringify({
+          email: "akash_"+userData.email,
+          firstName: userData.given_name || userData.name?.split(' ')[0] || 'User',
+          lastName: userData.family_name || userData.name?.split(' ').slice(1).join(' ') || '',
+          emailVerified: true,
+          isActive: true,
+          auth0Userid: `akash_${userId}`,
+          startBalance: 1000,
+        });
+
+        // Create user
+        const createUserResponse = await fetch(`${apiEndpoint}/admin/users`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${adminKey}`,
+            'Content-Type': 'application/json'
+          },
+          body
+        });
+        
+        if (createUserResponse.ok) {
+          const createData = await createUserResponse.json();
+          adminApiUserId = createData.userId || createData.id;
+        }
+        
+        if (!adminApiUserId) {
+          throw new Error('Failed to create or get admin API user ID');
+        }
+      }
+
+      // Create API key with Basic tier limits using admin API user ID
+      const apiKeyResponse = await fetch(`${apiEndpoint}/admin/api-keys`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${adminKey}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          key_alias: userId+'_akashchat',
-          user_role: userRole,
-          max_parallel_requests: maxParallelRequests,
-          team_id: teamId,
-          metadata: {
-            user_id: userId,
-            created_by: 'akashchat_signup',
-            created_at: new Date().toISOString()
-          }
+          userId: adminApiUserId,
+          name: "akashchat",
+          rateLimitRpm: 30,        // 30 requests per minute (1 every 2 seconds)
+          maxConcurrentRequests: 1 // 1 concurrent request (single user)
         })
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`LiteLLM API key creation failed: ${response.status} ${errorText}`);
+      if (!apiKeyResponse.ok) {
+        const errorText = await apiKeyResponse.text();
+        throw new Error(`Admin API key creation failed: ${apiKeyResponse.status} ${errorText}`);
       }
 
-      const result = await response.json();
+      const result = (await apiKeyResponse.json()).data;
       const apiKey = result.key;
 
       if (!apiKey) {
-        throw new Error('LiteLLM API did not return a valid key');
+        throw new Error('Admin API did not return a valid key');
       }
 
       // Store in database (encrypted) for backup/caching
@@ -77,14 +108,14 @@ export class LiteLLMService {
       
       return apiKey;
     } catch (error) {
-      console.error('Failed to generate LiteLLM API key:', error);
+      console.error('Failed to generate API key via Admin API:', error);
       throw error;
     }
   }
 
   /**
-   * Get an API key for a user with full fallback chain
-   * Order: Redis cache → Database
+   * Get an API key for a user with full fallback chain and auto-recreation
+   * Order: Redis cache → Database → Auto-recreate if expired
    */
   static async getApiKey(userId: string): Promise<string | null> {
     // 1. Try Redis cache first (fastest)
@@ -100,6 +131,7 @@ export class LiteLLMService {
       await this.storeApiKeyInRedis(userId, dbKey);
       return dbKey;
     }
+    
     return null;
   }
 
@@ -147,7 +179,10 @@ export class LiteLLMService {
   /**
    * Store API key in database (encrypted)
    */
-  private static async storeApiKeyInDatabase(userId: string, apiKey: string): Promise<void> {
+  private static async storeApiKeyInDatabase(
+    userId: string, 
+    apiKey: string
+  ): Promise<void> {
     const encryptionService = new EncryptionService(userId);
     
     // Encrypt the API key
@@ -185,6 +220,41 @@ export class LiteLLMService {
       return decrypted;
     } catch (error) {
       console.error('Failed to get API key from database:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get admin API user ID from Auth0 user ID
+   */
+  private static async getAdminApiUserId(auth0UserId: string): Promise<string | null> {
+    let apiEndpoint = process.env.API_ENDPOINT;
+    apiEndpoint = apiEndpoint?.replace('/v1', '');
+    const adminKey = process.env.API_KEY;
+
+    if (!apiEndpoint || !adminKey) {
+      throw new Error('Admin API configuration missing: API_ENDPOINT and API_KEY required');
+    }
+
+    const auth0Id = `akash_${auth0UserId}`;
+
+    try {
+      const response = await fetch(`${apiEndpoint}/admin/users/${encodeURIComponent(auth0Id)}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${adminKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const userData = (await response.json()).data;
+        return userData.id || null;
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Failed to get admin API user ID:', error);
       return null;
     }
   }

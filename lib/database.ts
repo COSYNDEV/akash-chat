@@ -309,7 +309,7 @@ export async function createChatSession(chatSession: Omit<ChatSession, 'created_
 }
 
 export async function getUserChatSessions(userId: string): Promise<ChatSession[]> {
-  const query = 'SELECT * FROM chat_sessions WHERE user_id = $1 ORDER BY created_at DESC';
+  const query = 'SELECT * FROM chat_sessions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 30';
   const result = await executeQuery<ChatSession>(query, [userId]);
   return result.rows;
 }
@@ -355,11 +355,6 @@ export async function updateChatSession(sessionId: string, updates: Partial<Chat
 export async function deleteChatSession(sessionId: string) {
   const query = 'DELETE FROM chat_sessions WHERE id = $1';
   await executeQuery(query, [sessionId]);
-}
-
-export async function deleteChatSessionsByFolderId(folderId: string) {
-  const query = 'DELETE FROM chat_sessions WHERE folder_id = $1';
-  await executeQuery(query, [folderId]);
 }
 
 // Chat Message Operations
@@ -432,11 +427,6 @@ export async function getBulkChatMessages(chatSessionIds: string[]): Promise<Map
   }
   
   return messagesByChat;
-}
-
-export async function deleteChatMessage(messageId: string) {
-  const query = 'DELETE FROM chat_messages WHERE id = $1';
-  await executeQuery(query, [messageId]);
 }
 
 // Saved Prompts Operations
@@ -563,64 +553,6 @@ export async function createUserApiKey(apiKey: Omit<UserApiKey, 'id' | 'created_
 export async function getUserApiKey(userId: string): Promise<UserApiKey | null> {
   const query = 'SELECT * FROM user_api_keys WHERE user_id = $1 AND is_active = true';
   const data = await executeQuerySingle<UserApiKey>(query, [userId]);
-  return data;
-}
-
-export async function updateUserApiKey(userId: string, updates: Partial<UserApiKey>) {
-  // Build dynamic update query
-  const updateFields = [];
-  const values = [];
-  let paramCount = 1;
-  
-  // Remove updated_at from updates to avoid duplicate assignment
-  const { updated_at, ...updatesWithoutTimestamp } = updates;
-  
-  for (const [key, value] of Object.entries(updatesWithoutTimestamp)) {
-    if (value !== undefined) {
-      updateFields.push(`${key} = $${paramCount}`);
-      values.push(value);
-      paramCount++;
-    }
-  }
-  
-  if (updateFields.length === 0) {
-    throw new Error('No fields to update');
-  }
-  
-  updateFields.push('updated_at = NOW()');
-  values.push(userId);
-  
-  const query = `
-    UPDATE user_api_keys 
-    SET ${updateFields.join(', ')}
-    WHERE user_id = $${paramCount}
-    RETURNING *
-  `;
-  
-  const data = await executeQuerySingle<UserApiKey>(query, values);
-  if (!data) {
-    throw new Error('Failed to update user API key');
-  }
-  return data;
-}
-
-export async function incrementUserApiKeyUsage(userId: string, requests: number = 1, tokens: number = 0, cost: number = 0) {
-  const query = `
-    UPDATE user_api_keys 
-    SET 
-      total_requests = total_requests + $1,
-      total_tokens = total_tokens + $2,
-      total_cost_usd = total_cost_usd + $3,
-      last_used_at = NOW(),
-      updated_at = NOW()
-    WHERE user_id = $4
-    RETURNING *
-  `;
-  
-  const data = await executeQuerySingle<UserApiKey>(query, [requests, tokens, cost, userId]);
-  if (!data) {
-    throw new Error('Failed to increment user API key usage');
-  }
   return data;
 }
 

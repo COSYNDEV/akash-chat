@@ -43,5 +43,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-
-// Removed GET endpoint - API keys should never be exposed to frontend

@@ -7,8 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useRateLimit } from '@/hooks/use-rate-limit';
 import { useWebSocketTranscription } from '@/hooks/use-websocket-transcription';
-import { cn } from "@/lib/utils";
 import { getCookie, setCookie } from '@/lib/cookies';
+import { cn } from "@/lib/utils";
 import { handleFileSelect } from '@/utils/file-handler';
 
 import { FileUpload } from '../file-upload';
@@ -80,7 +80,7 @@ export function ChatInput({
   });
   
   const [showFileUpload, setShowFileUpload] = useState(false);
-  const [limitInfo, setLimitInfo] = useState<{ used: number; limit: number; resetTime: Date } | null>(null);
+  const [limitInfo, setLimitInfo] = useState<{ usagePercentage: number; remainingPercentage: number; resetTime: Date } | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [previousInput, setPreviousInput] = useState(input);
@@ -121,17 +121,17 @@ export function ChatInput({
   };
 
   // Use centralized rate limit hook
-  const { used, limit, resetTime, blocked, checkBeforeSubmit, forceRefresh } = useRateLimit();
+  const { usagePercentage, remainingPercentage, resetTime, blocked } = useRateLimit();
   
-  // Calculate if close to rate limit (within 1 message)
-  const isNearLimit = !user?.sub && used >= limit - 1 && !blocked;
+  // Calculate if close to rate limit (above 90% usage)
+  const isNearLimit = !user?.sub && usagePercentage >= 90 && !blocked;
   
   useEffect(() => {
-    setLimitInfo({ used, limit, resetTime });
+    setLimitInfo({ usagePercentage, remainingPercentage, resetTime });
     if (onLimitReached && blocked !== isLimitReached) {
       onLimitReached(blocked);
     }
-  }, [used, limit, resetTime, blocked, onLimitReached, isLimitReached]);
+  }, [usagePercentage, remainingPercentage, resetTime, blocked, onLimitReached, isLimitReached]);
 
   // Update current time every second when limit is reached for live countdown
   useEffect(() => {
@@ -281,30 +281,13 @@ export function ChatInput({
             <RateLimitMessage getTimeRemaining={getTimeRemaining} />
           ) : (
             <>
-            <form onSubmit={async (e) => {
+            <form onSubmit={(e) => {
               e.preventDefault();
               
               if (isRecording) {
                 stopRecording();
               }
-              
-              // Check rate limit before submitting for anonymous users
-              if (!user?.sub) {
-                const canSubmit = await checkBeforeSubmit();
-                if (!canSubmit) {
-                  // Force refresh to get latest status and trigger UI update
-                  await forceRefresh();
-                  return;
-                }
-              }
-              
-              // Call the original onSubmit
               onSubmit(e);
-              
-              // Refresh rate limit status after submission for immediate feedback
-              if (!user?.sub) {
-                setTimeout(() => forceRefresh(), 500);
-              }
             }}>
               <Textarea
                 ref={textareaRef}
@@ -330,24 +313,11 @@ export function ChatInput({
                     e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
                   }
                 }}
-                onKeyDown={async (e) => {
+                onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     if (input.trim() && !isLoading) {
-                      // Check rate limit before submitting for anonymous users
-                      if (!user?.sub) {
-                        const canSubmit = await checkBeforeSubmit();
-                        if (!canSubmit) {
-                          await forceRefresh();
-                          return;
-                        }
-                      }                      
                       onSubmit(e as any);
-                      
-                      // Refresh rate limit status after submission
-                      if (!user?.sub) {
-                        setTimeout(() => forceRefresh(), 500);
-                      }
                     }
                   }
                 }}
@@ -424,8 +394,7 @@ export function ChatInput({
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="top">
-                    <p>You have {limit - used} message{limit - used !== 1 ? 's' : ''} remaining</p>
-                  </TooltipContent>
+                  <p>{remainingPercentage === 0 ? '<1' : remainingPercentage}% of your token limit remaining</p>                  </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             )}
@@ -500,26 +469,12 @@ export function ChatInput({
                   (isLoading || !input.trim()) && "opacity-30 cursor-not-allowed"
                 )}
                 aria-label="Send message"
-                onClick={async (e) => {
+                onClick={(e) => {
                   if (isRecording) {
                     stopRecording();
                   }
                   if (input.trim() && !isLoading) {
-                    // Check rate limit before submitting for anonymous users
-                    if (!user?.sub) {
-                      const canSubmit = await checkBeforeSubmit();
-                      if (!canSubmit) {
-                        await forceRefresh();
-                        return;
-                      }
-                    }
-                    
                     onSubmit(e as any);
-                    
-                    // Refresh rate limit status after submission
-                    if (!user?.sub) {
-                      setTimeout(() => forceRefresh(), 500);
-                    }
                   }
                 }}
               >

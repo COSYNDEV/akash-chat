@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { WS_TRANSCRIPTION_URLS, WS_TRANSCRIPTION_MODEL } from '@/app/config/api';
-import { withAuth } from '@/lib/auth';
+import { withSessionAuth } from '@/lib/auth';
 
 let currentIndex = 0;
 let healthyEndpoints: string[] = [...WS_TRANSCRIPTION_URLS];
@@ -117,4 +117,4 @@ async function handleGetRequest() {
   });
 }
 
-export const GET = withAuth(handleGetRequest); 
+export const GET = withSessionAuth(handleGetRequest); 

@@ -7,9 +7,9 @@ import { Tiktoken } from "tiktoken/lite";
 
 import { apiEndpoint, apiKey, imgGenFnModel, DEFAULT_SYSTEM_PROMPT } from '@/app/config/api';
 import { defaultModel, models, createConfigToApiIdMap } from '@/app/config/models';
-import { withAuth } from '@/lib/auth';
+import { withSessionAuth } from '@/lib/auth';
 import { getAvailableModels } from '@/lib/models';
-import { checkRateLimit, incrementRateLimit, getClientIP } from '@/lib/rate-limit';
+import { checkTokenLimit, incrementTokenUsage, getClientIP, getRateLimitConfig } from '@/lib/rate-limit';
 import { LiteLLMService } from '@/lib/services/litellm-service';
 import { generateImageTool } from '@/lib/tools';
 
@@ -17,79 +17,83 @@ if (!apiKey) {
   throw new Error('API_KEY is not set in environment variables');
 }
 
-// Create custom OpenAI provider instance with reasoning injection
-const openai = createOpenAI({
-  baseURL: apiEndpoint,
-  apiKey: apiKey,
-  compatibility: 'compatible',
-  // Inject reasoning content into the stream
-  fetch: async (url, options) => {
-    const response = await fetch(url, options);
-    
-    // Only process streaming responses
-    if (response.headers.get('content-type')?.includes('text/event-stream')) {
-      let reasoningBuffer = '';
-      let isFirstContent = true;
+function createOpenAIWithRateLimit(apiKey: string) {
+  return createOpenAI({
+    baseURL: apiEndpoint,
+    apiKey: apiKey,
+    compatibility: 'compatible',
+    // Inject reasoning content into the stream
+    fetch: async (url, options) => {
+      const response = await fetch(url, options);
       
-      const transformStream = new TransformStream({
-        transform(chunk, controller) {
-          const chunkText = new TextDecoder().decode(chunk);
-          const lines = chunkText.split('\n');
-          const modifiedLines: string[] = [];
-          
-          for (const line of lines) {
-            if (line.startsWith('data: ') && line !== 'data: [DONE]') {
-              try {
-                const data = JSON.parse(line.slice(6));
-                
-                // Capture reasoning content
-                if (data.choices?.[0]?.delta?.reasoning_content) {
-                  reasoningBuffer += data.choices[0].delta.reasoning_content;
-                }
-                
-                // Inject reasoning before first content
-                if (data.choices?.[0]?.delta?.content && isFirstContent && reasoningBuffer) {
-                  isFirstContent = false;
+      // Only process streaming responses
+      if (response.headers.get('content-type')?.includes('text/event-stream')) {
+        let reasoningBuffer = '';
+        let isFirstContent = true;
+        
+        const transformStream = new TransformStream({
+          transform(chunk, controller) {
+            const chunkText = new TextDecoder().decode(chunk);
+            const lines = chunkText.split('\n');
+            const modifiedLines: string[] = [];
+            
+            for (const line of lines) {
+              if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+                try {
+                  const data = JSON.parse(line.slice(6));
                   
-                  const reasoningChunk = {
-                    ...data,
-                    choices: [{
-                      ...data.choices[0],
-                      delta: {
-                        content: `<think>\n${reasoningBuffer}\n</think>\n\n`,
-                        role: data.choices[0].delta.role
-                      }
-                    }]
-                  };
+                  // Capture reasoning content
+                  if (data.choices?.[0]?.delta?.reasoning_content) {
+                    reasoningBuffer += data.choices[0].delta.reasoning_content;
+                  }
                   
-                  modifiedLines.push(`data: ${JSON.stringify(reasoningChunk)}`);
-                  modifiedLines.push('');
+                  // Inject reasoning before first content
+                  if (data.choices?.[0]?.delta?.content && isFirstContent && reasoningBuffer) {
+                    isFirstContent = false;
+                    
+                    const reasoningChunk = {
+                      ...data,
+                      choices: [{
+                        ...data.choices[0],
+                        delta: {
+                          content: `<think>\n${reasoningBuffer}\n</think>\n\n`,
+                          role: data.choices[0].delta.role
+                        }
+                      }]
+                    };
+                    
+                    modifiedLines.push(`data: ${JSON.stringify(reasoningChunk)}`);
+                    modifiedLines.push('');
+                  }
+                  
+                  modifiedLines.push(line);
+                  
+                } catch (e) {
+                  modifiedLines.push(line);
                 }
-                
-                modifiedLines.push(line);
-                
-              } catch (e) {
+              } else {
                 modifiedLines.push(line);
               }
-            } else {
-              modifiedLines.push(line);
             }
+            
+            controller.enqueue(new TextEncoder().encode(modifiedLines.join('\n')));
           }
-          
-          controller.enqueue(new TextEncoder().encode(modifiedLines.join('\n')));
-        }
-      });
+        });
+        
+        return new Response(response.body?.pipeThrough(transformStream), {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers
+        });
+      }
       
-      return new Response(response.body?.pipeThrough(transformStream), {
-        status: response.status,
-        statusText: response.statusText,
-        headers: response.headers
-      });
+      return response;
     }
-    
-    return response;
-  }
-});
+  });
+}
+
+// Create custom OpenAI provider instance with reasoning injection
+const openai = createOpenAIWithRateLimit(apiKey);
 
 // Define the handler function to be wrapped with authentication
 async function handlePostRequest(req: NextRequest) {
@@ -106,30 +110,30 @@ async function handlePostRequest(req: NextRequest) {
     
     // Create user-specific OpenAI client if user has API key
     if (userApiKey) {
-      openaiClient = createOpenAI({
-        baseURL: apiEndpoint,
-        apiKey: userApiKey,
-        compatibility: 'compatible'
-      });
+      openaiClient = createOpenAIWithRateLimit(userApiKey);
     }
   }
   
-  // Check rate limit for unauthenticated users AND authenticated users without API keys
+  // Apply rate limiting to all users (unless ACCESS_TOKEN is required)
   const isAccessTokenRequired = process.env.ACCESS_TOKEN && process.env.ACCESS_TOKEN.trim() !== '';
-  let clientIP: string | null = null;
+  let rateLimitIdentifier: string | null = null;
   
-  const shouldApplyRateLimit = (!isAuthenticated && !isAccessTokenRequired) || 
-                               (isAuthenticated && !userApiKey);
+  const shouldApplyRateLimit = !isAccessTokenRequired;
   
   if (shouldApplyRateLimit) {
-    clientIP = getClientIP(req);
-    const rateLimit = await checkRateLimit(clientIP);
+    // Use Auth0 user ID for authenticated users, IP for anonymous
+    rateLimitIdentifier = isAuthenticated && session?.user?.sub 
+      ? session.user.sub 
+      : getClientIP(req);
+    
+    const rateLimitConfig = getRateLimitConfig(isAuthenticated);
+    const rateLimit = await checkTokenLimit(rateLimitIdentifier!, rateLimitConfig);
     
     if (rateLimit.blocked) {
       const message = isAuthenticated 
-        ? `You've reached your limit of ${rateLimit.limit} messages per 2 hours. Please verify your email and accept marketing consent for unlimited access.`
-        : `You've reached your limit of ${rateLimit.limit} messages per 2 hours. Please try again later or sign in for extended access.`;
-        
+        ? `You've reached your token limit of ${rateLimit.limit} tokens per 4 hours. Please try again later.`
+        : `You've reached your token limit of ${rateLimit.limit} tokens per 4 hours. Sign in for 10x more tokens.`;
+      
       return new Response(
         JSON.stringify({
           error: 'Rate limit exceeded',
@@ -138,15 +142,16 @@ async function handlePostRequest(req: NextRequest) {
           used: rateLimit.used,
           remaining: rateLimit.remaining,
           resetTime: rateLimit.resetTime.toISOString(),
-          requiresVerification: isAuthenticated, // Flag to indicate user needs verification
+          requiresVerification: false,
+          tier: isAuthenticated ? 'authenticated' : 'anonymous'
         }),
         {
           status: 429,
           headers: {
             'Content-Type': 'application/json',
-            'X-RateLimit-Limit': rateLimit.limit.toString(),
-            'X-RateLimit-Remaining': rateLimit.remaining.toString(),
-            'X-RateLimit-Reset': Math.ceil(rateLimit.resetTime.getTime() / 1000).toString(),
+            'X-TokenLimit-Limit': rateLimit.limit.toString(),
+            'X-TokenLimit-Remaining': rateLimit.remaining.toString(),
+            'X-TokenLimit-Reset': Math.ceil(rateLimit.resetTime.getTime() / 1000).toString(),
           },
         }
       );
@@ -258,9 +263,17 @@ async function handlePostRequest(req: NextRequest) {
       if (smallResponse.toolResults.length > 0) {
         const imageResult = smallResponse.toolResults[0].result;
         
-        // Increment rate limit for successful image generation
-        if (!isAuthenticated && clientIP) {
-          await incrementRateLimit(clientIP);
+        // Track token usage for image generation
+        if (shouldApplyRateLimit && rateLimitIdentifier && smallResponse.usage) {
+          const totalTokens = (smallResponse.usage.promptTokens || 0) + (smallResponse.usage.completionTokens || 0);
+          if (totalTokens > 0) {
+            try {
+              const rateLimitConfig = getRateLimitConfig(isAuthenticated);
+              await incrementTokenUsage(rateLimitIdentifier, totalTokens, rateLimitConfig);
+            } catch (error) {
+              console.error('Failed to track token usage for image generation:', error);
+            }
+          }
         }
         
         return new Response(
@@ -306,11 +319,6 @@ async function handlePostRequest(req: NextRequest) {
       // Map config model ID to API model ID if needed
       const configToApiIdMap = createConfigToApiIdMap();
       const apiModelId = configToApiIdMap.get(model || defaultModel) || model || defaultModel;
-
-      // Increment rate limit for successful request start
-      if (shouldApplyRateLimit && clientIP) {
-        await incrementRateLimit(clientIP);
-      }
       
       const result = streamText({
         model: openai(apiModelId),
@@ -320,6 +328,24 @@ async function handlePostRequest(req: NextRequest) {
         topP: topP || selectedModel?.top_p,
 
       });
+      
+      // Track token usage for rate limiting
+      result.usage.then(async (usage) => {
+        if (shouldApplyRateLimit && rateLimitIdentifier && usage) {
+          const totalTokens = (usage.promptTokens || 0) + (usage.completionTokens || 0);
+          if (totalTokens > 0) {
+            try {
+              const rateLimitConfig = getRateLimitConfig(isAuthenticated);
+              await incrementTokenUsage(rateLimitIdentifier, totalTokens, rateLimitConfig);
+            } catch (error) {
+              console.error('Failed to track token usage:', error);
+            }
+          }
+        }
+      }).catch(error => {
+        console.error('Failed to get usage data:', error);
+      });
+      
       result.mergeIntoDataStream(dataStream);
     },
     onError: error => {
@@ -344,4 +370,4 @@ async function handlePostRequest(req: NextRequest) {
 }
 
 // Export the wrapped handler
-export const POST = withAuth(handlePostRequest);
+export const POST = withSessionAuth(handlePostRequest);

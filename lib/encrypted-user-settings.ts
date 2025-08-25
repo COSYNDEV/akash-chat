@@ -5,10 +5,7 @@ import {
   createSavedPrompt, 
   updateSavedPrompt, 
   deleteSavedPrompt,
-  reorderSavedPrompts,
-  createChatSession,
-  updateChatSession,
-  getUserApiKey,
+  reorderSavedPrompts
 } from './database';
 import { createEncryptionService } from './services/encryption-service';
 
@@ -265,86 +262,6 @@ export async function reorderEncryptedPrompts(userId: string, promptIds: string[
 }
 
 /**
- * Create chat session with encrypted name
- */
-export async function createEncryptedChatSession(
-  userId: string,
-  chatData: Omit<DecryptedChatSession, 'id' | 'created_at' | 'updated_at'>
-): Promise<string> {
-  try {
-    const encryptionService = createEncryptionService(userId);
-    
-    // Encrypt chat name
-    const nameEncrypted = await encryptionService.encryptForDatabase(chatData.name);
-    
-    // Prepare encrypted system prompt if present
-    let systemPromptEncrypted: string | undefined;
-    let systemPromptIv: string | undefined;
-    let systemPromptTag: string | undefined;
-    
-    if (chatData.system_prompt) {
-      const encrypted = await encryptionService.encryptForDatabase(chatData.system_prompt);
-      systemPromptEncrypted = encrypted.content_encrypted;
-      systemPromptIv = encrypted.content_iv;
-      systemPromptTag = encrypted.content_tag;
-    }
-    
-    const session = await createChatSession({
-      user_id: userId,
-      folder_id: chatData.folder_id,
-      name_encrypted: nameEncrypted.content_encrypted,
-      name_iv: nameEncrypted.content_iv,
-      name_tag: nameEncrypted.content_tag,
-      model_id: chatData.model_id,
-      model_name: chatData.model_name,
-      system_prompt_encrypted: systemPromptEncrypted,
-      system_prompt_iv: systemPromptIv,
-      system_prompt_tag: systemPromptTag,
-      parent_chat_id: chatData.parent_chat_id,
-      branched_at_index: chatData.branched_at_index
-    });
-    
-    return session.id!;
-  } catch (error) {
-    console.error('Failed to create encrypted chat session:', error);
-    throw error;
-  }
-}
-
-/**
- * Update chat session with encrypted name
- */
-export async function updateEncryptedChatSession(
-  sessionId: string,
-  userId: string,
-  updates: Partial<{ name: string; system_prompt: string }>
-): Promise<void> {
-  try {
-    const encryptionService = createEncryptionService(userId);
-    const encryptedUpdates: any = {};
-    
-    if (updates.name !== undefined) {
-      const nameEncrypted = await encryptionService.encryptForDatabase(updates.name);
-      encryptedUpdates.name_encrypted = nameEncrypted.content_encrypted;
-      encryptedUpdates.name_iv = nameEncrypted.content_iv;
-      encryptedUpdates.name_tag = nameEncrypted.content_tag;
-    }
-    
-    if (updates.system_prompt !== undefined) {
-      const encrypted = await encryptionService.encryptForDatabase(updates.system_prompt);
-      encryptedUpdates.system_prompt_encrypted = encrypted.content_encrypted;
-      encryptedUpdates.system_prompt_iv = encrypted.content_iv;
-      encryptedUpdates.system_prompt_tag = encrypted.content_tag;
-    }
-    
-    await updateChatSession(sessionId, encryptedUpdates);
-  } catch (error) {
-    console.error('Failed to update encrypted chat session:', error);
-    throw error;
-  }
-}
-
-/**
  * Sync user settings from localStorage to database
  */
 export async function syncUserSettingsToDatabase(
@@ -425,26 +342,4 @@ export async function syncUserSettingsFromDatabase(userId: string): Promise<void
       }));
       localStorage.setItem('savedSystemPrompts', JSON.stringify(promptsForLocalStorage));
     }
-}
-
-/**
- * Get decrypted user API key
- */
-export async function getDecryptedUserApiKey(userId: string): Promise<string | null> {
-  try {
-    const apiKeyData = await getUserApiKey(userId);
-    if (!apiKeyData) {return null;}
-    
-    const encryptionService = createEncryptionService(userId);
-    const decrypted = await encryptionService.decryptFromDatabase({
-      content_encrypted: apiKeyData.litellm_api_key_encrypted_b64,
-      content_iv: apiKeyData.litellm_api_key_iv_b64,
-      content_tag: apiKeyData.litellm_api_key_tag_b64
-    });
-    
-    return decrypted;
-  } catch (error) {
-    console.error('Failed to get decrypted user API key:', error);
-    return null;
-  }
 }

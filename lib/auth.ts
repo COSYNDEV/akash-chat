@@ -25,7 +25,7 @@ export async function validateSessionToken(req: NextRequest) {
   }
 }
 
-export function withAuth(handler: Function) {
+export function withSessionAuth(handler: Function) {
   return async function(req: NextRequest) {
     const isValid = await validateSessionToken(req);
     

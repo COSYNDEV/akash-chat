@@ -26,13 +26,8 @@ export function UserMenu({ className }: UserMenuProps) {
   const handleLogout = () => {
     
     try {
-      // Step 1: Clean up localStorage and prepare for logout
-      cleanupUserDataOnLogout();
-      
-      // Step 2: Reset all React state in context and hooks
+      cleanupUserDataOnLogout();      
       resetAllState();
-      
-      // Step 3: Redirect to logout after a brief delay to ensure cleanup completes
       setTimeout(() => {
         window.location.href = '/api/auth/logout';
       }, 100);
