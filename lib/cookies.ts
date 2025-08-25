@@ -15,7 +15,7 @@ interface CookieOptions {
  * Set a cookie with the given name and value
  */
 export function setCookie(name: string, value: string, options: CookieOptions = {}): void {
-  if (typeof document === 'undefined') return;
+  if (typeof document === 'undefined') {return;}
 
   const {
     days = 365, // Default to 1 year
@@ -47,13 +47,13 @@ export function setCookie(name: string, value: string, options: CookieOptions = 
  * Get a cookie value by name
  */
 export function getCookie(name: string): string | null {
-  if (typeof document === 'undefined') return null;
+  if (typeof document === 'undefined') {return null;}
 
   const nameEQ = `${encodeURIComponent(name)}=`;
   const cookies = document.cookie.split(';');
 
-  for (let cookie of cookies) {
-    let c = cookie.trim();
+  for (const cookie of cookies) {
+    const c = cookie.trim();
     if (c.indexOf(nameEQ) === 0) {
       return decodeURIComponent(c.substring(nameEQ.length));
     }
@@ -66,7 +66,7 @@ export function getCookie(name: string): string | null {
  * Delete a cookie by name
  */
 export function deleteCookie(name: string, path: string = '/'): void {
-  if (typeof document === 'undefined') return;
+  if (typeof document === 'undefined') {return;}
   
   setCookie(name, '', { days: -1, path });
 }

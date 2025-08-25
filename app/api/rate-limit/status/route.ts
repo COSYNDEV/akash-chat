@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 
-import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
+import { checkTokenLimit, getClientIP } from '@/lib/rate-limit';
 
 export async function GET(req: NextRequest) {
   try {
@@ -19,9 +19,9 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // For anonymous users, get actual rate limit status
+    // For anonymous users, get actual token limit status
     const clientIP = getClientIP(req);
-    const rateLimit = await checkRateLimit(clientIP);
+    const rateLimit = await checkTokenLimit(clientIP);
 
     return Response.json({
       limit: rateLimit.limit,

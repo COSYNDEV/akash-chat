@@ -1,6 +1,6 @@
 import redis from './redis';
 
-const MAX_REQUESTS = 3;
+const MAX_TOKENS = 10000;
 
 /**
  * Client-safe rate limiting utilities
@@ -37,148 +37,129 @@ export function formatTimeUntilReset(resetTime: Date): string {
 }
 
 export interface RateLimitConfig {
-  maxRequests: number;
-  windowMs: number; // Time window in milliseconds
+  maxTokens: number;
+  windowMs: number;
   keyPrefix?: string;
 }
 
-// Default rate limit: 2 messages per 2 hours for anonymous users
 export const DEFAULT_ANONYMOUS_LIMIT: RateLimitConfig = {
-  maxRequests: MAX_REQUESTS,
-  windowMs: 2 * 60 * 60 * 1000, // 2 hours
-  keyPrefix: 'rate_limit:anonymous:',
+  maxTokens: MAX_TOKENS,
+  windowMs: 4 * 60 * 60 * 1000, // 4 hours
+  keyPrefix: 'token_limit:anonymous:',
 };
 
 /**
- * Increment rate limit counter for a successful request
+ * Increment token usage for a successful request
  */
-export async function incrementRateLimit(
+export async function incrementTokenUsage(
   identifier: string,
+  tokenCount: number,
   config: RateLimitConfig = DEFAULT_ANONYMOUS_LIMIT
 ): Promise<RateLimit> {
-  const key = `${config.keyPrefix}${identifier}`;
+  const tokenKey = `${config.keyPrefix}${identifier}`;
+  const timestampKey = `${config.keyPrefix}${identifier}:start`;
   const now = Date.now();
-  const windowStart = now - config.windowMs;
   
   try {
-    // Use Redis sorted set to track requests with timestamps
+    // Check if this is the first request for this IP
     const pipeline = redis.pipeline();
-    
-    // Remove old entries outside the time window
-    pipeline.zremrangebyscore(key, 0, windowStart);
-    
-    // Count current requests in the window
-    pipeline.zcard(key);
-    
-    // Add current request
-    pipeline.zadd(key, now, `${now}-${Math.random()}`);
-    
-    // Set expiration for the key
-    pipeline.expire(key, Math.ceil(config.windowMs / 1000));
+    pipeline.get(tokenKey);
+    pipeline.get(timestampKey);
     
     const results = await pipeline.exec();
-    
-    if (!results) {
+    if (!results || results.length !== 2) {
       throw new Error('Redis pipeline failed');
     }
     
-    // Get the count before adding the current request
-    const currentCount = (results[1][1] as number) || 0;
-    const used = currentCount + 1; // Include the current request
+    const currentTokens = parseInt((results[0][1] as string) || '0');
+    let windowStartTime = parseInt((results[1][1] as string) || '0');
     
-    // Calculate reset time: when the oldest request will expire (sliding window)
-    let resetTime = new Date(now + config.windowMs);
-    
-    // If we're at or over the limit, find when the oldest request expires
-    if (used >= config.maxRequests) {
-      try {
-        // Get the oldest request timestamp
-        const oldestRequest = await redis.zrange(key, 0, 0, 'WITHSCORES');
-        if (oldestRequest.length >= 2) {
-          const oldestTimestamp = parseInt(oldestRequest[1]);
-          resetTime = new Date(oldestTimestamp + config.windowMs);
-        }
-      } catch (error) {
-        console.error('Failed to get oldest request:', error);
-        // Fallback to window end
-        resetTime = new Date(now + config.windowMs);
-      }
+    // If no start time exists, this is the first request - set start time
+    if (!windowStartTime) {
+      windowStartTime = now;
     }
     
+    const used = currentTokens + tokenCount;
+    const resetTime = new Date(windowStartTime + config.windowMs);
+    const ttlSeconds = Math.ceil((resetTime.getTime() - now) / 1000);
+    
+    // Update both token count and start time with same TTL
+    const updatePipeline = redis.pipeline();
+    updatePipeline.setex(tokenKey, ttlSeconds, used.toString());
+    updatePipeline.setex(timestampKey, ttlSeconds, windowStartTime.toString());
+    
+    await updatePipeline.exec();
+    
     const rateLimit: RateLimit = {
-      limit: config.maxRequests,
+      limit: config.maxTokens,
       used,
-      remaining: Math.max(0, config.maxRequests - used),
+      remaining: Math.max(0, config.maxTokens - used),
       resetTime,
-      blocked: used > config.maxRequests,
+      blocked: used > config.maxTokens,
     };
     
     return rateLimit;
   } catch (error) {
-    console.error('Rate limit check failed:', error);
+    console.error('Token usage tracking failed:', error);
     
-    // Fallback: Allow request if Redis is down
+    const resetTime = new Date(now + config.windowMs);
     return {
-      limit: config.maxRequests,
+      limit: config.maxTokens,
       used: 0,
-      remaining: config.maxRequests,
-      resetTime: new Date(now + config.windowMs),
+      remaining: config.maxTokens,
+      resetTime,
       blocked: false,
     };
   }
 }
 
 /**
- * Check rate limit without incrementing (for pre-request validation)
+ * Check token limit without incrementing (for pre-request validation)
  */
-export async function checkRateLimit(
+export async function checkTokenLimit(
   identifier: string,
   config: RateLimitConfig = DEFAULT_ANONYMOUS_LIMIT
 ): Promise<RateLimit> {
-  const key = `${config.keyPrefix}${identifier}`;
+  const tokenKey = `${config.keyPrefix}${identifier}`;
+  const timestampKey = `${config.keyPrefix}${identifier}:start`;
   const now = Date.now();
-  const windowStart = now - config.windowMs;
   
   try {
-    // Remove old entries and count current requests
-    await redis.zremrangebyscore(key, 0, windowStart);
-    const currentCount = await redis.zcard(key);
+    // Get current token count and start timestamp
+    const pipeline = redis.pipeline();
+    pipeline.get(tokenKey);
+    pipeline.get(timestampKey);
     
-    // Calculate reset time: when the oldest request will expire (sliding window)
-    let resetTime = new Date(now + config.windowMs);
-    
-    // If we're at or over the limit, find when the oldest request expires
-    if (currentCount >= config.maxRequests) {
-      try {
-        // Get the oldest request timestamp
-        const oldestRequest = await redis.zrange(key, 0, 0, 'WITHSCORES');
-        if (oldestRequest.length >= 2) {
-          const oldestTimestamp = parseInt(oldestRequest[1]);
-          resetTime = new Date(oldestTimestamp + config.windowMs);
-        }
-      } catch (error) {
-        console.error('Failed to get oldest request:', error);
-        // Fallback to window end
-        resetTime = new Date(now + config.windowMs);
-      }
+    const results = await pipeline.exec();
+    if (!results || results.length !== 2) {
+      throw new Error('Redis pipeline failed');
     }
     
+    const currentTokens = parseInt((results[0][1] as string) || '0');
+    const windowStartTime = parseInt((results[1][1] as string) || '0');
+    
+    // If no start time exists, user hasn't made any requests yet
+    const resetTime = windowStartTime 
+      ? new Date(windowStartTime + config.windowMs)
+      : new Date(now + config.windowMs);
+    
     return {
-      limit: config.maxRequests,
-      used: currentCount,
-      remaining: Math.max(0, config.maxRequests - currentCount),
+      limit: config.maxTokens,
+      used: currentTokens,
+      remaining: Math.max(0, config.maxTokens - currentTokens),
       resetTime,
-      blocked: currentCount >= config.maxRequests,
+      blocked: currentTokens >= config.maxTokens,
     };
   } catch (error) {
-    console.error('Rate limit check failed:', error);
+    console.error('Token limit check failed:', error);
     
     // Fallback
+    const resetTime = new Date(now + config.windowMs);
     return {
-      limit: config.maxRequests,
+      limit: config.maxTokens,
       used: 0,
-      remaining: config.maxRequests,
-      resetTime: new Date(now + config.windowMs),
+      remaining: config.maxTokens,
+      resetTime,
       blocked: false,
     };
   }
@@ -188,9 +169,15 @@ export async function checkRateLimit(
  * Get client IP address from request headers
  */
 export function getClientIP(request: Request): string {
+  // Check for custom X-Original-Chat-Forwarded-For header first
+  const originalChatForwarded = request.headers.get('X-Original-Chat-Forwarded-For');
   const forwarded = request.headers.get('x-forwarded-for');
   const realIP = request.headers.get('x-real-ip');
   const cfConnectingIP = request.headers.get('cf-connecting-ip');
+  
+  if (originalChatForwarded) {
+    return originalChatForwarded.split(',')[0].trim();
+  }
   
   if (forwarded) {
     return forwarded.split(',')[0].trim();

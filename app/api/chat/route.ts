@@ -9,7 +9,7 @@ import { apiEndpoint, apiKey, imgGenFnModel, DEFAULT_SYSTEM_PROMPT } from '@/app
 import { defaultModel, models, createConfigToApiIdMap } from '@/app/config/models';
 import { withAuth } from '@/lib/auth';
 import { getAvailableModels } from '@/lib/models';
-import { checkRateLimit, incrementRateLimit, getClientIP } from '@/lib/rate-limit';
+import { checkTokenLimit, incrementTokenUsage, getClientIP } from '@/lib/rate-limit';
 import { LiteLLMService } from '@/lib/services/litellm-service';
 import { generateImageTool } from '@/lib/tools';
 
@@ -123,12 +123,12 @@ async function handlePostRequest(req: NextRequest) {
   
   if (shouldApplyRateLimit) {
     clientIP = getClientIP(req);
-    const rateLimit = await checkRateLimit(clientIP);
+    const rateLimit = await checkTokenLimit(clientIP);
     
     if (rateLimit.blocked) {
       const message = isAuthenticated 
-        ? `You've reached your limit of ${rateLimit.limit} messages per 2 hours. Please verify your email and accept marketing consent for unlimited access.`
-        : `You've reached your limit of ${rateLimit.limit} messages per 2 hours. Please try again later or sign in for extended access.`;
+        ? `You've reached your token limit of ${rateLimit.limit} tokens per 4 hours. Please verify your email and accept marketing consent for unlimited access.`
+        : `You've reached your token limit of ${rateLimit.limit} tokens per 4 hours. Please try again later or sign in for extended access.`;
         
       return new Response(
         JSON.stringify({
@@ -144,9 +144,9 @@ async function handlePostRequest(req: NextRequest) {
           status: 429,
           headers: {
             'Content-Type': 'application/json',
-            'X-RateLimit-Limit': rateLimit.limit.toString(),
-            'X-RateLimit-Remaining': rateLimit.remaining.toString(),
-            'X-RateLimit-Reset': Math.ceil(rateLimit.resetTime.getTime() / 1000).toString(),
+            'X-TokenLimit-Limit': rateLimit.limit.toString(),
+            'X-TokenLimit-Remaining': rateLimit.remaining.toString(),
+            'X-TokenLimit-Reset': Math.ceil(rateLimit.resetTime.getTime() / 1000).toString(),
           },
         }
       );
@@ -167,9 +167,9 @@ async function handlePostRequest(req: NextRequest) {
     cl100k_base.pat_str
   );
 
-  const prompt_tokens = encoding.encode(system || "You are a helpful assistant.");
-
-  let tokenCount = prompt_tokens.length;
+  const prompt_tokens = encoding.encode(system || DEFAULT_SYSTEM_PROMPT);
+  let inputTokenCount = prompt_tokens.length;
+  let tokenCount = inputTokenCount;
   let messagesToSend: Message[] = [];
 
   if (context) {
@@ -184,6 +184,7 @@ async function handlePostRequest(req: NextRequest) {
         });
       }
       tokenCount += tokens.length;
+      inputTokenCount += tokens.length;
     }
   }
 
@@ -223,6 +224,7 @@ async function handlePostRequest(req: NextRequest) {
       break;
     }
     tokenCount += tokens.length;
+    inputTokenCount += tokens.length;
     messagesToSend = [message, ...messagesToSend];
   }
 
@@ -236,17 +238,25 @@ async function handlePostRequest(req: NextRequest) {
     }
   }
 
-  encoding.free();
-
   if (model === 'AkashGen') {
     // Skip the image generation tool if it fails
     try {
       // Send the message to a small model first to determine if it's an image request
       const smallModelId = imgGenFnModel || 'Meta-Llama-3-3-70B-Instruct';
+      
+      // Calculate input tokens for image generation request
+      const imageMessages = messagesToSend.slice(-3);
+      const imageSystemPrompt = "Always enhance the user's image request by creating a descriptive image prompt in order to generate a detailed, high-quality image with Stable Diffusion 3.5. Only use the generateImage tool if the user asks for an image. To decide if the user asked for an image, messages but focus on the last one. When asked to generate images, you will use the generateImage tool.";
+      
+      let imageInputTokens = encoding.encode(imageSystemPrompt).length;
+      for (const msg of imageMessages) {
+        imageInputTokens += encoding.encode(msg.content).length;
+      }
+      
       const smallResponse = await generateText({
         model: openaiClient(smallModelId),
-        messages: messagesToSend.slice(-3),
-        system: "Always enhance the user's image request by creating a descriptive image prompt in order to generate a detailed, high-quality image with Stable Diffusion 3.5. Only use the generateImage tool if the user asks for an image. To decide if the user asked for an image, messages but focus on the last one. When asked to generate images, you will use the generateImage tool.",
+        messages: imageMessages,
+        system: imageSystemPrompt,
         tools: {
           generateImage: generateImageTool
         },
@@ -258,10 +268,36 @@ async function handlePostRequest(req: NextRequest) {
       if (smallResponse.toolResults.length > 0) {
         const imageResult = smallResponse.toolResults[0].result;
         
-        // Increment rate limit for successful image generation
-        if (!isAuthenticated && clientIP) {
-          await incrementRateLimit(clientIP);
+        // Track token usage for image generation with manual counting fallback
+        if (shouldApplyRateLimit && clientIP) {
+          let inputTokens = imageInputTokens; // Our manual count
+          let outputTokens = 0;
+          
+          // Try to use API usage data first, fallback to manual counting
+          if (smallResponse.usage && smallResponse.usage.promptTokens && smallResponse.usage.completionTokens) {
+            inputTokens = smallResponse.usage.promptTokens;
+            outputTokens = smallResponse.usage.completionTokens;
+          } else {
+            // Manual token counting fallback - estimate output based on tool result
+            const toolOutput = JSON.stringify(imageResult);
+            outputTokens = encoding.encode(toolOutput).length;
+          }
+          
+          const totalTokens = inputTokens + outputTokens;
+          
+          if (totalTokens > 0) {
+            try {
+              await incrementTokenUsage(clientIP, totalTokens);
+            } catch (error) {
+              console.error('Failed to track token usage for image generation:', error);
+            }
+          } else {
+            console.warn('No token usage data available for image generation rate limiting');
+          }
         }
+        
+        // Clean up encoding before returning
+        encoding.free();
         
         return new Response(
           simulateReadableStream({
@@ -286,6 +322,9 @@ async function handlePostRequest(req: NextRequest) {
       // If the small model didn't use the image generation tool, use the default model for the rest of the conversation
       model = 'Meta-Llama-3-3-70B-Instruct';
     } catch (error) {
+      // Clean up encoding on error
+      encoding.free();
+      
       return new Response(
         JSON.stringify({
           error: 'Error generating image',
@@ -301,16 +340,38 @@ async function handlePostRequest(req: NextRequest) {
     }
   }
 
+  // Track output content for manual token counting
+  let outputContent = '';
+  let tokensAlreadyCounted = false;
+  
+  // Function to count and track tokens
+  const countAndTrackTokens = async (forceCount = false) => {
+    if (tokensAlreadyCounted && !forceCount) {return;}
+    tokensAlreadyCounted = true;
+    
+    if (shouldApplyRateLimit && clientIP) {
+      const inputTokens = inputTokenCount;
+      let outputTokens = 0;
+      
+      outputTokens = encoding.encode(outputContent).length;
+      
+      const totalTokens = inputTokens + outputTokens;
+      
+      if (totalTokens > 0) {
+        try {
+          await incrementTokenUsage(clientIP, totalTokens);
+        } catch (error) {
+          console.error('Failed to track token usage:', error);
+        }
+      }
+    }
+  };
+
   return createDataStreamResponse({
     execute: async dataStream => {      
       // Map config model ID to API model ID if needed
       const configToApiIdMap = createConfigToApiIdMap();
       const apiModelId = configToApiIdMap.get(model || defaultModel) || model || defaultModel;
-
-      // Increment rate limit for successful request start
-      if (shouldApplyRateLimit && clientIP) {
-        await incrementRateLimit(clientIP);
-      }
       
       const result = streamText({
         model: openai(apiModelId),
@@ -318,12 +379,47 @@ async function handlePostRequest(req: NextRequest) {
         system: system || DEFAULT_SYSTEM_PROMPT,
         temperature: temperature || selectedModel?.temperature,
         topP: topP || selectedModel?.top_p,
-
+        onChunk: (chunk) => {
+          // Collect output content for manual token counting
+          if (chunk.chunk.type === 'text-delta') {
+            outputContent += chunk.chunk.textDelta;
+          }
+        },
       });
+
+      // Track token usage for rate limiting with manual counting fallback
+      result.usage.then(async (usage) => {
+        if (shouldApplyRateLimit && clientIP && usage && usage.promptTokens && usage.completionTokens) {
+          tokensAlreadyCounted = true;
+          
+          const inputTokens = usage.promptTokens;
+          const outputTokens = usage.completionTokens;
+          const totalTokens = inputTokens + outputTokens;
+          
+          if (totalTokens > 0) {
+            try {
+              await incrementTokenUsage(clientIP, totalTokens);
+            } catch (error) {
+              console.error('Failed to track token usage:', error);
+            }
+          }
+        } else {
+          await countAndTrackTokens();
+        }
+      }).catch(error => {
+        console.error('Failed to get usage data:', error);
+      }).finally(() => {
+        // Clean up encoding after processing
+        encoding.free();
+      });
+      
       result.mergeIntoDataStream(dataStream);
     },
     onError: error => {
       console.log('error', error);
+      // Clean up encoding on error
+      encoding.free();
+      
       // Handle specific OpenAI errors
       if (error instanceof Error) {
         if (error.name === 'OpenAIError') {

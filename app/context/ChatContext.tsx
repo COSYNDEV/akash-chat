@@ -14,6 +14,7 @@ import { useChatHistory } from '@/hooks/use-chat-history';
 import { useDatabaseSync } from '@/hooks/use-database-sync';
 import { useEncryptedSettings, UserPreferences } from '@/hooks/use-encrypted-settings';
 import { Folder, useFolders } from '@/hooks/use-folders';
+import { useRateLimit } from '@/hooks/use-rate-limit';
 import { getAccessToken, storeAccessToken, processMessages } from '@/lib/utils';
 
 const SELECTED_MODEL_KEY = 'selectedModel';
@@ -137,6 +138,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Auth state
   const { user, isLoading: isLoadingAuth } = useUser();
   const isAuthenticated = !!user;
+  
+  // Rate limiting hook
+  const { trackMessageSuccess, trackMessageFailure } = useRateLimit();
   
   // Session state
   const [sessionInitialized, setSessionInitialized] = useState(false);
@@ -336,8 +340,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         type: f.type,
       })),
     },
-    onFinish: (message: AIMessage) => {
+    onFinish: async (message: AIMessage) => {
       setModelError(null);
+      
+      // Track message success for rate limiting
+      await trackMessageSuccess();
+      
       const newUserMessage: AIMessage = {
         role: 'user',
         content: input,
@@ -363,8 +371,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateChat(selectedChat, allMessages);
       }
     },
-    onError: (error: Error) => {
+    onError: async (error: Error) => {
       setModelError(error.message);
+      
+      // Track message failure for rate limiting
+      await trackMessageFailure(error);
     },
   });
 

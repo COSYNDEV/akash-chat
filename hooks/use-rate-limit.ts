@@ -23,7 +23,6 @@ let lastFetchTime = 0;
 let subscribers: Set<(state: RateLimitStatus) => void> = new Set();
 let fetchPromise: Promise<void> | null = null;
 
-const FETCH_INTERVAL = 5000; // 5 seconds for more responsive rate limiting
 const MIN_FETCH_INTERVAL = 1000; // Minimum 1 second between fetches
 
 async function fetchRateLimitStatus(): Promise<void> {
@@ -104,7 +103,6 @@ export function useRateLimit() {
   );
 
   const refreshRateLimit = useCallback(async () => {
-    // Don't fetch for authenticated users
     if (user?.sub) return;
     await fetchRateLimitStatus();
   }, [user?.sub]);
@@ -123,7 +121,7 @@ export function useRateLimit() {
         error: null,
       };
       setState(authenticatedState);
-      return; // Don't set up any polling for authenticated users
+      return;
     }
 
     // Skip if still loading auth
@@ -132,10 +130,8 @@ export function useRateLimit() {
     // Subscribe to global state updates for anonymous users only
     subscribers.add(setState);
     
-    // Initial fetch if we don't have data or it's stale
-    const needsFetch = !globalRateLimitState || 
-      globalRateLimitState.isLoading || 
-      (Date.now() - lastFetchTime > FETCH_INTERVAL);
+    // Initial fetch if we don't have data
+    const needsFetch = !globalRateLimitState || globalRateLimitState.isLoading;
     
     if (needsFetch) {
       fetchRateLimitStatus();
@@ -144,15 +140,9 @@ export function useRateLimit() {
       setState(globalRateLimitState);
     }
 
-    // Set up periodic refresh for anonymous users only
-    const interval = setInterval(() => {
-      fetchRateLimitStatus();
-    }, FETCH_INTERVAL);
-
     // Cleanup
     return () => {
       subscribers.delete(setState);
-      clearInterval(interval);
     };
   }, [user?.sub, isAuthLoading]);
 
@@ -161,24 +151,48 @@ export function useRateLimit() {
     // Authenticated users are never rate limited
     if (user?.sub) return true;
     
-    // Refresh rate limit status before checking
     await refreshRateLimit();
     
     // Return true if not blocked, false if blocked
     return !globalRateLimitState?.blocked;
   }, [user?.sub, refreshRateLimit]);
 
-  // Force refresh rate limit status (useful after failed requests)
   const forceRefresh = useCallback(async () => {
-    lastFetchTime = 0; // Reset to force immediate fetch
+    lastFetchTime = 0;
     await fetchRateLimitStatus();
   }, []);
+
+  // Event-based tracking functions
+  const trackMessageSuccess = useCallback(async (tokenUsage?: { promptTokens: number; completionTokens: number }) => {
+    // Update rate limit after successful message
+    if (user?.sub) return;
+
+    await forceRefresh();
+    
+    if (tokenUsage && process.env.NODE_ENV === 'development') {
+      console.log('Message succeeded with token usage:', tokenUsage);
+    }
+  }, [user?.sub, forceRefresh]);
+
+  const trackMessageFailure = useCallback(async (error?: any) => {
+    // Handle message failure - refresh to get current status
+    if (user?.sub) return;
+    
+    await forceRefresh();
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Message failed:', error);
+    }
+  }, [user?.sub, forceRefresh]);
 
   return {
     ...state,
     refresh: refreshRateLimit,
     checkBeforeSubmit,
     forceRefresh,
+    // Event-based tracking
+    trackMessageSuccess,
+    trackMessageFailure,
   };
 }
 

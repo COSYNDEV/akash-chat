@@ -245,13 +245,12 @@ export default function ProfilePage() {
             ) : !(marketingConsent || consentGiven) ? (
               <div className="border border-border rounded-lg p-6 text-center space-y-4">
                 <div className="flex justify-center">
-                  <AlertCircle className="w-12 h-12 text-blue-500" />
+                  <AlertCircle className="w-12 h-12" />
                 </div>
                 <h1 className="text-2xl font-bold">Complete Your Profile</h1>
                 <h2 className="text-lg font-semibold">Marketing Consent Required</h2>
                 <p className="text-muted-foreground">
                   To use AkashChat, you must agree to receive marketing emails. 
-                  You can unsubscribe at any time.
                 </p>
                 {error && (
                   <div className="text-red-500 text-sm flex items-center justify-center gap-2">

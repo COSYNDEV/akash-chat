@@ -22,7 +22,6 @@ export const models: Model[] = [
   {
     id: 'DeepSeek-V3.1',
     name: 'DeepSeek V3.1',
-    apiId: 'deepseek-ai/DeepSeek-V3.1',
     description: 'Next-generation reasoning model with enhanced capabilities',
     temperature: 0.6,
     top_p: 0.95,
@@ -44,7 +43,6 @@ DeepSeek V3.1 features improved training methodologies, enhanced reasoning capab
   {
     id: 'openai-gpt-oss-120b',
     name: 'GPT-OSS-120B',
-    apiId: 'openai/gpt-oss-120b',
     description: 'Efficient reasoning model with 117B parameters (5.1B active)',
     temperature: 0.6,
     top_p: 0.95,
@@ -101,7 +99,6 @@ Qwen3 235B A22B delivers superior performance in complex logical reasoning, math
   {
     id: 'Qwen3-235B-A22B-Instruct-2507-FP8',
     name: 'Qwen3 235B A22B Instruct 2507',
-    apiId: 'Qwen/Qwen3-235B-A22B-Instruct-2507-FP8',
     description: 'Enhanced reasoning and alignment in a non-thinking model',
     temperature: 0.7,
     top_p: 0.8,
@@ -144,7 +141,6 @@ With native 262K context length support and improved long-context understanding,
   {
     id: 'DeepSeek-R1-0528',
     name: 'DeepSeek R1 0528',
-    apiId: 'deepseek-ai/DeepSeek-R1-0528',
     description: 'Strong Mixture-of-Experts (MoE) LLM',
     temperature: 0.6,
     top_p: 0.95,
@@ -166,7 +162,6 @@ The 0528 version introduces refined training techniques and improved reasoning p
   {
     id: 'meta-llama-Llama-4-Maverick-17B-128E-Instruct-FP8',
     name: 'Llama 4 Maverick 17B 128E',
-    apiId: 'meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8',
     description: '400B parameter model (17B active) with 128 experts',
     temperature: 0.6,
     top_p: 0.9,
@@ -230,7 +225,6 @@ Qwen QwQ-32B blends fast inference with high accuracy, making it ideal for resea
   {
     id: 'Meta-Llama-3-3-70B-Instruct',
     name: 'Llama 3.3 70B',
-    apiId: 'meta-llama/Llama-3.3-70B-Instruct',
     description: 'Well-rounded model with strong capabilities',
     temperature: 0.6,
     top_p: 0.9,
