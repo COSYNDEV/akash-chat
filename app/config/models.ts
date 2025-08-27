@@ -20,6 +20,28 @@ export interface Model {
 
 export const models: Model[] = [
   {
+    id: 'NousResearch-Hermes-4-405B-FP8',
+    name: 'Hermes 4 405B',
+    apiId: 'NousResearch/Hermes-4-405B-FP8',
+    description: 'Frontier reasoning model with hybrid mode capabilities',
+    temperature: 0.6,
+    top_p: 0.9,
+    tokenLimit: 65536,
+    parameters: '405B',
+    architecture: 'Llama-3.1-405B with reasoning enhancement',
+    hf_repo: 'NousResearch/Hermes-4-405B-FP8',
+    aboutContent: `Experience **Hermes 4 405B FP8**, Nous Research's frontier reasoning model built on Llama-3.1-405B. This advanced model features hybrid mode capabilities with deliberation reasoning using <think>...</think> tags, delivering exceptional performance in math, code, STEM, logic, and creative tasks.
+
+Hermes 4 excels in function calling, tool use, schema adherence, and structured JSON outputs while maintaining reduced refusal rates and high steerability. The FP8 quantized version provides efficient deployment without compromising on the model's advanced reasoning capabilities.`,
+    infoContent: `
+* ⚡ Advanced reasoning with deliberation mode support
+* 🧠 Function calling and tool use capabilities
+* 🌐 Decentralized hosting for lower costs & full control
+* 🔍 Optimized for math, code, STEM, logic, and creative tasks`,
+    thumbnailId: 'llama-3',
+    //deployUrl: 'https://console.akash.network/templates/akash-network-awesome-akash-Hermes-4-405B-FP8'
+  },
+  {
     id: 'DeepSeek-V3.1',
     name: 'DeepSeek V3.1',
     apiId: 'deepseek-ai/DeepSeek-V3.1',
@@ -39,7 +61,7 @@ DeepSeek V3.1 features improved training methodologies, enhanced reasoning capab
 * 🌐 Decentralized hosting for cost-effective, unrestricted access
 * 🔍 Optimized for coding, mathematics, reasoning, and creative tasks`,
     thumbnailId: 'deepseek',
-    //deployUrl: 'https://console.akash.network/templates/akash-network-awesome-akash-DeepSeek-V3.1'
+    deployUrl: 'https://console.akash.network/templates/akash-network-awesome-akash-DeepSeek-V3.1'
   },
   {
     id: 'openai-gpt-oss-120b',
@@ -372,7 +394,7 @@ With 405 billion parameters, this model excels at deep understanding, long-conte
 ];
 
 // in case the `DEFAULT_MODEL` environment variable is not set or set to an unsupported model
-export const fallbackModelID = 'DeepSeek-V3.1';
+export const fallbackModelID = 'NousResearch-Hermes-4-405B-FP8';
 export const defaultModel = process.env.DEFAULT_MODEL || fallbackModelID;
 
 /**
