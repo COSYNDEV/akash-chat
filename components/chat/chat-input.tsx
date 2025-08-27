@@ -394,7 +394,10 @@ export function ChatInput({
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="top">
-                    <p>{Math.round(((limit - used) / limit) * 100)}% of your token limit remaining</p>
+                    <p>{(() => {
+                      const percentage = Math.round(((limit - used) / limit) * 100);
+                      return percentage === 0 ? '<1' : percentage;
+                    })()}% of your token limit remaining</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>

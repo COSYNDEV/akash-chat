@@ -174,6 +174,11 @@ export function getClientIP(request: Request): string {
   const forwarded = request.headers.get('x-forwarded-for');
   const realIP = request.headers.get('x-real-ip');
   const cfConnectingIP = request.headers.get('cf-connecting-ip');
+  console.log('originalChatForwarded', originalChatForwarded);
+  console.log('forwarded', forwarded);
+  console.log('realIP', realIP);
+  console.log('cfConnectingIP', cfConnectingIP);
+  console.log('request.headers', request.headers);
   
   if (originalChatForwarded) {
     return originalChatForwarded.split(',')[0].trim();
