@@ -39,7 +39,7 @@ Hermes 4 excels in function calling, tool use, schema adherence, and structured 
 * 🌐 Decentralized hosting for lower costs & full control
 * 🔍 Optimized for math, code, STEM, logic, and creative tasks`,
     thumbnailId: 'llama-3',
-    //deployUrl: 'https://console.akash.network/templates/akash-network-awesome-akash-Hermes-4-405B-FP8'
+    deployUrl: 'https://console.akash.network/templates/akash-network-awesome-akash-Hermes-4-405B-FP8'
   },
   {
     id: 'DeepSeek-V3.1',
