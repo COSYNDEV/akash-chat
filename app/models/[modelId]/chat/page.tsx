@@ -60,14 +60,19 @@ export default function ModelDetailPage( {params}: any) {
   // Effect to set model on mount
   useEffect(() => {
     if (availableModels.length > 0 && modelId) {
-      const foundModel = availableModels.find(m => m.id.toLowerCase() === modelId.toLowerCase());
-      
+      // Look for model using either id or model_id field (database models use model_id)
+      const foundModel = availableModels.find(m => 
+        (m.id && m.id.toLowerCase() === modelId.toLowerCase()) ||
+        (m.model_id && m.model_id.toLowerCase() === modelId.toLowerCase())
+      );
       if (foundModel) {
         setModel(foundModel);
         
         if (foundModel.available) {
           // Set the model but don't redirect
-          setModelSelection(foundModel.id);
+          // Set the model but don't redirect - use model_id if available, fallback to id
+          const modelSelectionId = foundModel.model_id || foundModel.id;
+          setModelSelection(modelSelectionId);
           
           // Only create a new chat if there isn't one already
           if (messages.length === 0 && !selectedChat) {

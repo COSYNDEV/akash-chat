@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { ArrowRight, Gauge, Info, MessageCircle, Layers, Settings } from "lucide-react";
 import Link from "next/link";
+import { useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 
 import { models, Model } from "@/app/config/models";
@@ -14,9 +15,11 @@ import { cn } from "@/lib/utils";
 interface ModelDetailClientProps {
   modelId: string;
   model?: Model;
+  modelWithAccess?: any;
+  userTier?: string;
 }
 
-export function ModelDetailClient({ modelId, model: serverModel }: ModelDetailClientProps) {
+export function ModelDetailClient({ modelId, model: serverModel, modelWithAccess }: ModelDetailClientProps) {
   const {
     setModelSelection,
     handleNewChat,
@@ -30,6 +33,13 @@ export function ModelDetailClient({ modelId, model: serverModel }: ModelDetailCl
   } = useChatContext();
 
   const model = serverModel || models.find(m => m.id.toLowerCase() === modelId.toLowerCase());
+
+  // Set the model selection in the header when viewing this page
+  useEffect(() => {
+    if (model && model.id) {
+      setModelSelection(model.id);
+    }
+  }, [model?.id, setModelSelection]);
 
   // If model not found, show error state
   if (!model) {
@@ -136,25 +146,77 @@ export function ModelDetailClient({ modelId, model: serverModel }: ModelDetailCl
               </p>
 
               <div className="space-y-3">
-                <Button
-                  asChild
-                  className={cn(
-                    "w-full text-md flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-6",
-                    !model.available && "opacity-50"
-                  )}
-                >
-                  <Link 
-                    href={`/models/${model.id}/chat`}
-                    onClick={model.available ? () => {
-                      setModelSelection(model.id);
-                      handleNewChat();
-                    } : undefined}
-                    aria-label={model.available ? "Start chat with this model" : "Model currently unavailable"}
+                {/* Dynamic action button based on user access and availability */}
+                {modelWithAccess?.action_button === 'start_chat' ? (
+                  <Button
+                    asChild
+                    className={cn(
+                      "w-full text-md flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-6",
+                      (!model.available || modelWithAccess?.action_text === 'Unavailable') && "opacity-50"
+                    )}
                   >
-                    Start Chat
-                    <MessageCircle className="h-5 w-5 ml-1" />
-                  </Link>
-                </Button>
+                    <Link 
+                      href={modelWithAccess?.action_text === 'Unavailable' ? '#' : `/models/${model.id}/chat`}
+                      onClick={model.available && modelWithAccess?.action_text !== 'Unavailable' ? () => {
+                        setModelSelection(model.id);
+                        handleNewChat();
+                      } : undefined}
+                      aria-label={model.available && modelWithAccess?.action_text !== 'Unavailable' ? "Start chat with this model" : "Model currently unavailable"}
+                    >
+                      {modelWithAccess?.action_text || 'Start Chat'}
+                      <MessageCircle className="h-5 w-5 ml-1" />
+                    </Link>
+                  </Button>
+                ) : modelWithAccess?.action_button === 'sign_up' ? (
+                  <Button
+                    asChild
+                    className="w-full text-md flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-6"
+                  >
+                    <Link 
+                      href="/api/auth/login"
+                      aria-label={`Sign up to access ${model.name}`}
+                    >
+                      {modelWithAccess?.action_text || 'Sign Up'}
+                      <ArrowRight className="h-5 w-5 ml-1" />
+                    </Link>
+                  </Button>
+                ) : modelWithAccess?.action_button === 'upgrade' ? (
+                  <Button
+                    asChild
+                    className="w-full text-md flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-6"
+                  >
+                    <Link 
+                      href="/pricing"
+                      aria-label={`Upgrade to access ${model.name}`}
+                    >
+                      {modelWithAccess?.action_text || 'Upgrade'}
+                      <ArrowRight className="h-5 w-5 ml-1" />
+                    </Link>
+                  </Button>
+                ) : (
+                  // Fallback to original logic
+                  <Button
+                    asChild
+                    className={cn(
+                      "w-full text-md flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-6",
+                      !model.available && "opacity-50"
+                    )}
+                  >
+                    <Link 
+                      href={`/models/${model.id}/chat`}
+                      onClick={model.available ? () => {
+                        setModelSelection(model.id);
+                        handleNewChat();
+                      } : undefined}
+                      aria-label={model.available ? "Start chat with this model" : "Model currently unavailable"}
+                    >
+                      Start Chat
+                      <MessageCircle className="h-5 w-5 ml-1" />
+                    </Link>
+                  </Button>
+                )}
+                
+                {/* Deploy button */}
                 {model.deployUrl && (
                   <Button
                     asChild
@@ -167,7 +229,9 @@ export function ModelDetailClient({ modelId, model: serverModel }: ModelDetailCl
                     </Link>
                   </Button>
                 )}
-                {!model.available && (
+                
+                {/* Status messages based on access control */}
+                {modelWithAccess?.action_button === 'start_chat' && modelWithAccess?.action_text === 'Unavailable' && (
                   <p className="text-sm text-muted-foreground mt-2 text-center">
                     This model is currently unavailable for chat
                   </p>

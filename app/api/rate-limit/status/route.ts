@@ -1,7 +1,7 @@
 import { getSession } from '@auth0/nextjs-auth0';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { checkTokenLimit, getClientIP, getRateLimitConfig } from '@/lib/rate-limit';
+import { checkTokenLimit, getClientIP, getRateLimitConfigForUser } from '@/lib/rate-limit';
 
 export async function GET(req: NextRequest) {
   try {
@@ -25,15 +25,18 @@ export async function GET(req: NextRequest) {
     
     // Determine rate limit identifier and config
     let rateLimitIdentifier: string;
-    const rateLimitConfig = getRateLimitConfig(isAuthenticated);
+    let userId: string | null = null;
     
     if (isAuthenticated && session?.user?.sub) {
       // Use Auth0 user ID for authenticated users
       rateLimitIdentifier = session.user.sub;
+      userId = session.user.sub;
     } else {
       // Use IP for anonymous users
       rateLimitIdentifier = getClientIP(req);
     }
+    
+    const rateLimitConfig = await getRateLimitConfigForUser(userId);
 
     const rateLimit = await checkTokenLimit(rateLimitIdentifier, rateLimitConfig);
 

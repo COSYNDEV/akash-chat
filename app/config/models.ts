@@ -1,5 +1,6 @@
 export interface Model {
   id: string;
+  model_id?: string;
   name: string;
   description?: string;
   available?: boolean;
@@ -16,6 +17,10 @@ export interface Model {
   deployUrl?: string;
   // Optional field to map to different API model IDs
   apiId?: string;
+  // New fields for API availability and categorization
+  category?: string;
+  isApiAvailable?: boolean;
+  isChatAvailable?: boolean;
 }
 
 export const models: Model[] = [

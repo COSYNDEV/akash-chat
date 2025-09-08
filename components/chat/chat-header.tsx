@@ -58,6 +58,7 @@ export function ChatHeader({
       router.push('/models/'+newModelId+'/chat/');
     }
   };
+  const model = availableModels.find(model => model.id === modelSelection);
   
   return (
     <header className="flex-none flex items-center justify-between gap-2 sm:gap-4 p-2 sm:p-4 border-b border-border bg-background z-10">
@@ -89,18 +90,18 @@ export function ChatHeader({
               >
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-6 bg-muted flex items-center justify-center rounded-md text-xs">
-                    {(availableModels.find(model => model.id === modelSelection)?.name || "Model").substring(0, 2).toUpperCase()}
+                    {(model?.name || "Model").substring(0, 2).toUpperCase()}
                   </div>
                   <div className="hidden sm:flex flex-col items-start">
                     <span className="font-medium text-xs">
-                      {availableModels.find(model => model.id === modelSelection)?.name || "Select model"}
+                      {model?.name || "Select model"}
                     </span>
                     <span className="text-[9px] text-muted-foreground">
-                      {(availableModels.find(model => model.id === modelSelection)?.description || "Select a model").substring(0, 20)}...
+                      {(model?.description || "Select a model").substring(0, 20)}...
                     </span>
                   </div>
                   <div className="sm:hidden text-xs">
-                    {(availableModels.find(model => model.id === modelSelection)?.name || "Select model").substring(0, 6)}...
+                    {(model?.name || "Select model").substring(0, 6)}...
                   </div>
                 </div>
                 <div className="text-muted-foreground ml-1 flex-shrink-0">
@@ -151,18 +152,18 @@ export function ChatHeader({
             )}
           >
             <div className="w-6 h-6 bg-muted flex items-center justify-center rounded-md text-xs">
-              {(availableModels.find(model => model.id === modelSelection)?.name || "Model").substring(0, 2).toUpperCase()}
+              {(model?.name || "Model").substring(0, 2).toUpperCase()}
             </div>
             <div className="hidden sm:flex flex-col items-start">
               <span className="font-medium text-xs">
-                {availableModels.find(model => model.id === modelSelection)?.name || "Select model"}
+                {model?.name || "Select model"}
               </span>
               <span className="text-[9px] text-muted-foreground">
-                {(availableModels.find(model => model.id === modelSelection)?.description || "Select a model").substring(0, 20)}...
+                {(model?.description || "Select a model").substring(0, 20)}...
               </span>
             </div>
             <div className="sm:hidden text-xs">
-              {(availableModels.find(model => model.id === modelSelection)?.name || "Select model").substring(0, 6)}...
+              {(model?.name || "Select model").substring(0, 6)}...
             </div>
           </div>
         )}

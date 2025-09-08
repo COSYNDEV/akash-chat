@@ -1,3 +1,4 @@
+import { getUserTier, getModelByModelId } from './database';
 import redis from './redis';
 
 const MAX_TOKENS = parseInt(process.env.RATE_LIMIT_ANONYMOUS_TOKENS || '25000');
@@ -67,7 +68,58 @@ export function getRateLimitConfig(isAuthenticated: boolean): RateLimitConfig {
 }
 
 /**
- * Increment token usage for a successful request
+ * Get rate limit config based on user's tier from database
+ */
+export async function getRateLimitConfigForUser(userId: string | null): Promise<RateLimitConfig> {
+  if (!userId) {
+    return DEFAULT_ANONYMOUS_LIMIT;
+  }
+  
+  try {
+    const userTier = await getUserTier(userId);
+    if (!userTier) {
+      return DEFAULT_ANONYMOUS_LIMIT;
+    }
+    
+    return {
+      maxTokens: userTier.token_limit,
+      windowMs: userTier.rate_limit_window_ms,
+      keyPrefix: 'token_limit:user:',
+    };
+  } catch (error) {
+    console.error('Error fetching user tier for rate limiting:', error);
+    return DEFAULT_ANONYMOUS_LIMIT;
+  }
+}
+
+/**
+ * Increment token usage with model multiplier support
+ */
+export async function incrementTokenUsageWithMultiplier(
+  identifier: string,
+  actualTokens: number,
+  modelId: string,
+  config: RateLimitConfig
+): Promise<RateLimit> {
+  try {
+    // Get the model to find its token multiplier
+    const model = await getModelByModelId(modelId);
+    const tokenMultiplier = model?.token_multiplier || 1.0;
+    
+    // Calculate effective tokens (hidden from user)
+    const effectiveTokens = Math.ceil(actualTokens * tokenMultiplier);
+    
+    // Use the effective tokens for rate limiting
+    return await incrementTokenUsage(identifier, effectiveTokens, config);
+  } catch (error) {
+    console.error('Error applying token multiplier:', error);
+    // Fallback to using actual tokens if model lookup fails
+    return await incrementTokenUsage(identifier, actualTokens, config);
+  }
+}
+
+/**
+ * Increment token usage for a successful request (legacy function)
  */
 export async function incrementTokenUsage(
   identifier: string,

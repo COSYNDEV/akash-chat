@@ -1,7 +1,7 @@
 import { getSession } from '@auth0/nextjs-auth0';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getUserPreferences } from '@/lib/database';
+import { getUserPreferences, upsertUserPreferences, updateUserTier } from '@/lib/database';
 import { LiteLLMService } from '@/lib/services/litellm-service';
 
 /**
@@ -21,10 +21,24 @@ export async function POST(req: NextRequest) {
     }
 
     const existingPreferences = await getUserPreferences(userId);
-    
+    const key = await LiteLLMService.getApiKey(userId);
+
     // Generate or get API key for this user
-    if (!await LiteLLMService.getApiKey(userId)) {
+    if (!key) {
       await LiteLLMService.generateApiKey(userId);
+    }
+
+    // Create user preferences record for new users
+    if (!existingPreferences) {
+      // Create default preferences for new user
+      await upsertUserPreferences({
+        user_id: userId,
+        temperature: 0.7,
+        top_p: 0.95
+      });
+      
+      // Set user tier to 'extended' (default for new users)
+      await updateUserTier(userId, 'extended');
     }
 
     return NextResponse.json({ 
@@ -32,7 +46,7 @@ export async function POST(req: NextRequest) {
       isNewUser: !existingPreferences,
       message: existingPreferences 
         ? 'User initialized successfully' 
-        : 'New user created and initialized'
+        : 'New user created and initialized with extended tier'
     });
 
   } catch (error: any) {

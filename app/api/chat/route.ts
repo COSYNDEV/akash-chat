@@ -6,10 +6,10 @@ import cl100k_base from "tiktoken/encoders/cl100k_base.json";
 import { Tiktoken } from "tiktoken/lite";
 
 import { apiEndpoint, apiKey, imgGenFnModel, DEFAULT_SYSTEM_PROMPT } from '@/app/config/api';
-import { defaultModel, models, createConfigToApiIdMap } from '@/app/config/models';
+import { defaultModel, createConfigToApiIdMap } from '@/app/config/models';
 import { withSessionAuth } from '@/lib/auth';
-import { getAvailableModels } from '@/lib/models';
-import { checkTokenLimit, incrementTokenUsage, getClientIP, getRateLimitConfig } from '@/lib/rate-limit';
+import { getAvailableModelsForUser } from '@/lib/models';
+import { checkTokenLimit, incrementTokenUsageWithMultiplier, getClientIP, getRateLimitConfigForUser } from '@/lib/rate-limit';
 import { LiteLLMService } from '@/lib/services/litellm-service';
 import { generateImageTool } from '@/lib/tools';
 
@@ -121,26 +121,24 @@ async function handlePostRequest(req: NextRequest) {
   const shouldApplyRateLimit = !isAccessTokenRequired;
   
   if (shouldApplyRateLimit) {
-    // Use Auth0 user ID for authenticated users, IP for anonymous
-    rateLimitIdentifier = isAuthenticated && session?.user?.sub 
-      ? session.user.sub 
-      : getClientIP(req);
+    // Determine user ID for database-driven rate limiting
+    const userId = isAuthenticated && session?.user?.sub ? session.user.sub : null;
     
-    const rateLimitConfig = getRateLimitConfig(isAuthenticated);
+    // Use Auth0 user ID for authenticated users, IP for anonymous
+    rateLimitIdentifier = userId || getClientIP(req);
+    
+    const rateLimitConfig = await getRateLimitConfigForUser(userId);
     const rateLimit = await checkTokenLimit(rateLimitIdentifier!, rateLimitConfig);
     
     if (rateLimit.blocked) {
       const message = isAuthenticated 
-        ? `You've reached your token limit of ${rateLimit.limit} tokens per 4 hours. Please try again later.`
-        : `You've reached your token limit of ${rateLimit.limit} tokens per 4 hours. Sign in for 10x more tokens.`;
+        ? `You've reached your usage limit for this time period. Please try again later.`
+        : `You've reached your usage limit for this time period. Sign in for higher limits.`;
       
       return new Response(
         JSON.stringify({
           error: 'Rate limit exceeded',
           message,
-          limit: rateLimit.limit,
-          used: rateLimit.used,
-          remaining: rateLimit.remaining,
           resetTime: rateLimit.resetTime.toISOString(),
           requiresVerification: false,
           tier: isAuthenticated ? 'authenticated' : 'anonymous'
@@ -149,8 +147,6 @@ async function handlePostRequest(req: NextRequest) {
           status: 429,
           headers: {
             'Content-Type': 'application/json',
-            'X-TokenLimit-Limit': rateLimit.limit.toString(),
-            'X-TokenLimit-Remaining': rateLimit.remaining.toString(),
             'X-TokenLimit-Reset': Math.ceil(rateLimit.resetTime.getTime() / 1000).toString(),
           },
         }
@@ -160,11 +156,42 @@ async function handlePostRequest(req: NextRequest) {
   
   // Extract the `messages` and `model` from the body of the request
   const body = await req.json();
-  const { messages, system, temperature, topP, context } = body;
+  const { messages, system, context } = body;
+  // Ensure temperature and topP are numbers
+  const temperature = body.temperature ? Number(body.temperature) : undefined;
+  const topP = body.topP ? Number(body.topP) : undefined;
   let { model } = body;
-  // Get available models from cache or API
-  const allModels = await getAvailableModels();
-  const selectedModel = allModels.find(m => m.id === model) || models.find(m => m.id === defaultModel);
+  // Helper to normalize model format
+  const normalizeModel = (model: any) => ({
+    model_id: model.model_id || model.id,
+    token_limit: model.token_limit || model.tokenLimit,
+    temperature: model.temperature,
+    top_p: model.top_p,
+  });
+
+  // Get user ID for model access validation (authenticated users vs anonymous)
+  const userId = isAuthenticated && session?.user?.sub ? session.user.sub : null;
+  
+  // Get available models for this specific user (considers tier access)
+  const allModels = await getAvailableModelsForUser(userId);
+  const dbModel = allModels.find(m => m.model_id === model);
+  
+  // Validate that user has access to this model
+  if (!dbModel) {
+    return new Response(
+      JSON.stringify({
+        error: 'Model not available',
+        message: `The model "${model}" is not available for your account tier. Please select a different model.`,
+        available_models: allModels.map(m => ({ id: m.model_id, name: m.name }))
+      }),
+      { 
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+  }
+  
+  const selectedModel = normalizeModel(dbModel);
 
   const encoding = new Tiktoken(
     cl100k_base.bpe_ranks,
@@ -180,7 +207,7 @@ async function handlePostRequest(req: NextRequest) {
   if (context) {
     for (const file of context) {
       const tokens = encoding.encode(file.content);
-      if (tokenCount + tokens.length + 1000 > (selectedModel?.tokenLimit || 128000)) {
+      if (tokenCount + tokens.length + 1000 > (selectedModel?.token_limit || 128000)) {
         return new Response('Your files have too much content for this model. Please remove some files or try a different model.', {
           status: 400,
           headers: {
@@ -196,14 +223,11 @@ async function handlePostRequest(req: NextRequest) {
     const message = messages[i];
     const tokens = encoding.encode(message.content);
 
-    if (tokenCount + tokens.length + 1000 > (selectedModel?.tokenLimit || 128000)) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`Token limit reached: ${tokenCount + tokens.length}`);
-      }
+    if (tokenCount + tokens.length + 1000 > (selectedModel?.token_limit || 128000)) {
       // If we haven't added any messages yet, we need to include at least the last message
       // even if it's too long, to avoid empty messages array
       if (messagesToSend.length === 0) {
-        const tokenLimit = selectedModel?.tokenLimit || 128000;
+        const tokenLimit = selectedModel?.token_limit || 128000;
         const availableTokens = tokenLimit - tokenCount - 1000;
         const errorMessage = "[Message too long for this model. Please try with a shorter message or a different model.]";
         
@@ -268,8 +292,10 @@ async function handlePostRequest(req: NextRequest) {
           const totalTokens = (smallResponse.usage.promptTokens || 0) + (smallResponse.usage.completionTokens || 0);
           if (totalTokens > 0) {
             try {
-              const rateLimitConfig = getRateLimitConfig(isAuthenticated);
-              await incrementTokenUsage(rateLimitIdentifier, totalTokens, rateLimitConfig);
+              const userId = isAuthenticated && session?.user?.sub ? session.user.sub : null;
+              const rateLimitConfig = await getRateLimitConfigForUser(userId);
+              // Use model from body for token multiplier calculation
+              await incrementTokenUsageWithMultiplier(rateLimitIdentifier, totalTokens, model, rateLimitConfig);
             } catch (error) {
               console.error('Failed to track token usage for image generation:', error);
             }
@@ -335,8 +361,10 @@ async function handlePostRequest(req: NextRequest) {
           const totalTokens = (usage.promptTokens || 0) + (usage.completionTokens || 0);
           if (totalTokens > 0) {
             try {
-              const rateLimitConfig = getRateLimitConfig(isAuthenticated);
-              await incrementTokenUsage(rateLimitIdentifier, totalTokens, rateLimitConfig);
+              const userId = isAuthenticated && session?.user?.sub ? session.user.sub : null;
+              const rateLimitConfig = await getRateLimitConfigForUser(userId);
+              // Use model from body for token multiplier calculation
+              await incrementTokenUsageWithMultiplier(rateLimitIdentifier, totalTokens, model, rateLimitConfig);
             } catch (error) {
               console.error('Failed to track token usage:', error);
             }
@@ -349,7 +377,6 @@ async function handlePostRequest(req: NextRequest) {
       result.mergeIntoDataStream(dataStream);
     },
     onError: error => {
-      console.log('error', error);
       // Handle specific OpenAI errors
       if (error instanceof Error) {
         if (error.name === 'OpenAIError') {

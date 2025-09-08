@@ -37,8 +37,8 @@ export const GET = withErrorHandling(
       preferences = {
         selectedModel: prefs.selected_model,
         systemPrompt: '', // Will be decrypted in batch operation
-        temperature: prefs.temperature,
-        topP: prefs.top_p
+        temperature: typeof prefs.temperature === 'string' ? parseFloat(prefs.temperature) : prefs.temperature,
+        topP: typeof prefs.top_p === 'string' ? parseFloat(prefs.top_p) : prefs.top_p
       };
     }
 

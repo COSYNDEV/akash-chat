@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useUser } from '@auth0/nextjs-auth0/client';
 
+import { cleanupDuplicatePrompts } from '@/lib/data-sync';
+
 export interface SavedPrompt {
   id?: string;
   name: string;
@@ -500,6 +502,9 @@ export function useEncryptedSettings() {
         
         // First load from localStorage for immediate display
         if (typeof window !== 'undefined') {
+          // Clean up any existing duplicates first
+          cleanupDuplicatePrompts();
+          
           const savedPromptsStr = localStorage.getItem('savedSystemPrompts');
           let localPrompts: SavedPrompt[] = savedPromptsStr ? JSON.parse(savedPromptsStr) : [];
           setSavedPrompts(localPrompts);
@@ -509,6 +514,9 @@ export function useEncryptedSettings() {
         loadSettingsFromDatabase();
       } else if (!user?.sub && typeof window !== 'undefined') {
         // Not logged in: load from localStorage
+        // Clean up any existing duplicates first
+        cleanupDuplicatePrompts();
+        
         const savedPromptsStr = localStorage.getItem('savedSystemPrompts');
         let localPrompts: SavedPrompt[] = savedPromptsStr ? JSON.parse(savedPromptsStr) : [];
         setSavedPrompts(localPrompts);

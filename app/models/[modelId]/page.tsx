@@ -3,38 +3,141 @@ import { notFound } from 'next/navigation';
 
 import { models } from '@/app/config/models';
 import { ModelDetailClient } from '@/components/models/model-detail-client';
-import { getAvailableModels } from '@/lib/models';
 
 // Revalidate every 10 minutes like the main models page
 export const revalidate = 600;
 
+// Cache for models/all API response  
+let modelsCache: any = null;
+let cacheTime: number = 0;
+const CACHE_TTL = 60000; // 1 minute cache
+
+async function fetchAllModels() {
+  const now = Date.now();
+  
+  // Return cached data if still valid
+  if (modelsCache && (now - cacheTime) < CACHE_TTL) {
+    return modelsCache;
+  }
+  
+  try {
+    // Determine the correct base URL for the API call
+    let baseUrl = 'http://localhost:3000';
+    
+    if (typeof window !== 'undefined') {
+      // Client side - use current origin
+      baseUrl = window.location.origin;
+    } else if (process.env.VERCEL_URL) {
+      // Vercel deployment
+      baseUrl = `https://${process.env.VERCEL_URL}`;
+    } else if (process.env.NEXTAUTH_URL) {
+      // Custom deployment
+      baseUrl = process.env.NEXTAUTH_URL;
+    }
+    
+    const response = await fetch(`${baseUrl}/api/models/all`, {
+      next: { revalidate: 60 }, // Next.js caching
+    });
+    
+    if (!response.ok) {
+      throw new Error(`API responded with ${response.status}`);
+    }
+    
+    const data = await response.json();
+    modelsCache = data;
+    cacheTime = now;
+    
+    return data;
+  } catch (error) {
+    console.warn('[MODELS] Failed to fetch models/all, using static fallback:', error);
+    // Return static fallback for build time and error cases
+    return {
+      models: models.map(model => ({
+        model_id: model.id,
+        name: model.name,
+        description: model.description,
+        tier_requirement: 'permissionless',
+        available: true,
+        parameters: model.parameters,
+        architecture: model.architecture,
+        about_content: model.aboutContent,
+        info_content: model.infoContent,
+        thumbnail_id: model.thumbnailId,
+        deploy_url: model.deployUrl,
+        user_has_access: true,
+        is_available_now: true,
+        action_button: 'start_chat',
+        action_text: 'Start Chat',
+        temperature: model.temperature,
+        top_p: model.top_p,
+        token_limit: model.tokenLimit,
+        owned_by: model.owned_by,
+        hf_repo: model.hf_repo,
+        api_id: model.apiId,
+        display_order: 0
+      })),
+      user_tier: 'permissionless',
+      stats: { total_models: models.length }
+    };
+  }
+}
+
 // Generate static params for all models in the config
 // This ensures all model pages are pre-built at build time
 export async function generateStaticParams() {
-  return models.map(model => ({
-    modelId: model.id,
-  }));
+  try {
+    const { models: allModels } = await fetchAllModels();
+    return allModels.map((model: any) => ({
+      modelId: model.model_id,
+    }));
+  } catch (error) {
+    console.warn('[MODELS] Using static config for generateStaticParams:', error);
+    return models.map(model => ({
+      modelId: model.id,
+    }));
+  }
 }
 
 export async function generateMetadata(props: {
   params: Promise<{ modelId: string }>
 }): Promise<Metadata> {
   const { modelId } = await props.params;
-  const model = models.find(m => m.id.toLowerCase() === modelId.toLowerCase());
   
+  // Try to get model from API first, then fallback to static config
+  let model: any = null;
+  try {
+    const { models: allModels } = await fetchAllModels();
+    model = allModels.find((m: any) => m.model_id.toLowerCase() === modelId.toLowerCase());
+  } catch (error) {
+    console.warn('[MODELS] Using static config for metadata:', error);
+  }
+  
+  // Fallback to static config if not found in API
   if (!model) {
-    return {
-      title: 'Model Not Found - AkashChat',
-      description: 'The requested AI model could not be found on AkashChat.',
+    const staticModel = models.find(m => m.id.toLowerCase() === modelId.toLowerCase());
+    if (!staticModel) {
+      return {
+        title: 'Model Not Found - AkashChat',
+        description: 'The requested AI model could not be found on AkashChat.',
+      };
+    }
+    model = {
+      name: staticModel.name,
+      description: staticModel.description,
+      about_content: staticModel.aboutContent,
+      hf_repo: staticModel.hf_repo,
+      architecture: staticModel.architecture,
+      parameters: staticModel.parameters,
+      token_limit: staticModel.tokenLimit
     };
   }
 
   return {
     title: `${model.name} - AI Model | AkashChat`,
-    description: model.aboutContent || model.description || `Learn about and chat with ${model.name}, an advanced AI model powered by the Akash Supercloud.`,
+    description: model.about_content || model.description || `Learn about and chat with ${model.name}, an advanced AI model powered by the Akash Supercloud.`,
     openGraph: {
       title: `${model.name} - AI Model | AkashChat`,
-      description: model.aboutContent || model.description || `Learn about and chat with ${model.name}, an advanced AI model powered by the Akash Supercloud.`,
+      description: model.about_content || model.description || `Learn about and chat with ${model.name}, an advanced AI model powered by the Akash Supercloud.`,
       url: `https://chat.akash.network/models/${modelId}/`,
       type: 'website',
       images: [
@@ -49,13 +152,13 @@ export async function generateMetadata(props: {
     twitter: {
       card: 'summary_large_image',
       title: `${model.name} - AI Model | AkashChat`,
-      description: model.aboutContent || model.description || `Learn about and chat with ${model.name}, an advanced AI model powered by the Akash Supercloud.`,
+      description: model.about_content || model.description || `Learn about and chat with ${model.name}, an advanced AI model powered by the Akash Supercloud.`,
       images: ['/og-image.png']
     },
     alternates: {
       canonical: `/models/${modelId}/`,
     },
-    keywords: ['AI model', model.name, 'language model', 'Akash Network', 'LLM', 'machine learning', 'chat model', 'AI conversation', 'free AI', 'free chat AI', 'free AI model', 'decentralized AI', model.hf_repo || '', model.architecture || '', model.parameters + ' parameters', model.tokenLimit?.toString() + ' context length' || ''],
+    keywords: ['AI model', model.name, 'language model', 'Akash Network', 'LLM', 'machine learning', 'chat model', 'AI conversation', 'free AI', 'free chat AI', 'free AI model', 'decentralized AI', model.hf_repo || '', model.architecture || '', (model.parameters || '') + ' parameters', (model.token_limit || model.tokenLimit)?.toString() + ' context length' || ''],
   };
 }
 
@@ -64,24 +167,73 @@ export default async function ModelIntroPage(props: {
 }) {
   const { modelId } = await props.params;
   
-  // First check if model exists in static config
-  const staticModel = models.find(m => m.id.toLowerCase() === modelId.toLowerCase());
-  if (!staticModel) {
-    notFound();
+  // Get model data with access control and availability info
+  let modelWithAccess: any = null;
+  let userTier = 'permissionless';
+  
+  try {
+    const { models: allModels, user_tier } = await fetchAllModels();
+    modelWithAccess = allModels.find((m: any) => m.model_id.toLowerCase() === modelId.toLowerCase());
+    userTier = user_tier || 'permissionless';
+  } catch (error) {
+    console.warn('[MODELS DETAIL] API error, using static fallback:', error);
   }
   
-  // Try to get live availability data, but don't fail if unavailable
-  let model = staticModel;
-  try {
-    const availableModels = await getAvailableModels();
-    const liveModel = availableModels.find(m => m.id.toLowerCase() === modelId.toLowerCase());
-    if (liveModel) {
-      model = liveModel;
+  // Fallback to static config if not found in API
+  if (!modelWithAccess) {
+    const staticModel = models.find(m => m.id.toLowerCase() === modelId.toLowerCase());
+    if (!staticModel) {
+      notFound();
     }
-  } catch (error) {
-    console.error('Error fetching available models, using static data:', error);
-    // Continue with static model
+    
+    // Convert static model to API format
+    modelWithAccess = {
+      model_id: staticModel.id,
+      name: staticModel.name,
+      description: staticModel.description,
+      tier_requirement: 'permissionless',
+      available: true,
+      temperature: staticModel.temperature,
+      top_p: staticModel.top_p,
+      token_limit: staticModel.tokenLimit,
+      owned_by: staticModel.owned_by,
+      parameters: staticModel.parameters,
+      architecture: staticModel.architecture,
+      hf_repo: staticModel.hf_repo,
+      about_content: staticModel.aboutContent,
+      info_content: staticModel.infoContent,
+      thumbnail_id: staticModel.thumbnailId,
+      deploy_url: staticModel.deployUrl,
+      api_id: staticModel.apiId,
+      user_has_access: true,
+      is_available_now: true,
+      action_button: 'start_chat',
+      action_text: 'Start Chat',
+      display_order: 0
+    };
   }
+  
+  // Helper function to convert database model to config model format for compatibility
+  const convertToConfigModel = (dbModel: any) => ({
+    id: dbModel.model_id,
+    name: dbModel.name,
+    description: dbModel.description,
+    available: dbModel.is_available_now,
+    temperature: dbModel.temperature,
+    top_p: dbModel.top_p,
+    tokenLimit: dbModel.token_limit,
+    owned_by: dbModel.owned_by,
+    parameters: dbModel.parameters,
+    architecture: dbModel.architecture,
+    hf_repo: dbModel.hf_repo,
+    aboutContent: dbModel.about_content,
+    infoContent: dbModel.info_content,
+    thumbnailId: dbModel.thumbnail_id,
+    deployUrl: dbModel.deploy_url,
+    apiId: dbModel.api_id,
+  });
+
+  const model = convertToConfigModel(modelWithAccess);
 
   return (
     <>
@@ -147,7 +299,12 @@ export default async function ModelIntroPage(props: {
       </article>
       
       {/* Client component for interactive elements */}
-      <ModelDetailClient modelId={modelId} model={model} />
+      <ModelDetailClient 
+        modelId={modelId} 
+        model={model} 
+        modelWithAccess={modelWithAccess}
+        userTier={userTier}
+      />
     </>
   );
 } 

@@ -610,3 +610,223 @@ export async function deleteAllUserData(userId: string) {
     throw error;
   }
 }
+
+// User Tiers Management
+export interface UserTier {
+  id?: string;
+  name: string;
+  display_name: string;
+  token_limit: number;
+  rate_limit_window_ms: number;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+export interface Model {
+  id?: string;
+  model_id: string;
+  api_id?: string;
+  name: string;
+  description?: string;
+  tier_requirement: string;
+  available: boolean;
+  token_multiplier: number;
+  temperature?: number;
+  top_p?: number;
+  token_limit?: number;
+  owned_by?: string;
+  parameters?: string;
+  architecture?: string;
+  hf_repo?: string;
+  about_content?: string;
+  info_content?: string;
+  thumbnail_id?: string;
+  deploy_url?: string;
+  display_order: number;
+  created_at?: Date;
+  updated_at?: Date;
+  // New fields for API availability and categorization
+  category?: string;
+  is_api_available?: boolean;
+  is_chat_available?: boolean;
+}
+
+/**
+ * Get user's tier information
+ * Anonymous users (no userId) default to permissionless tier
+ * Only extended/pro users have user_preferences records
+ */
+export async function getUserTier(userId: string | null): Promise<UserTier | null> {
+  if (!userId) {
+    // Anonymous user - return permissionless tier
+    const query = `SELECT * FROM user_tiers WHERE name = 'permissionless' LIMIT 1`;
+    const result = await executeQuery<UserTier>(query, []);
+    const tier = result.rows[0] || null;
+    return tier;
+  }
+  
+  const query = `
+    SELECT ut.* FROM user_tiers ut
+    JOIN user_preferences up ON up.tier_id = ut.id
+    WHERE up.user_id = $1
+  `;
+  
+  const result = await executeQuery<UserTier>(query, [userId]);
+  if (result.rows[0]) {
+    return result.rows[0];
+  }
+  
+  // User exists but no preferences record - they're anonymous/permissionless
+  const permissionlessQuery = `SELECT * FROM user_tiers WHERE name = 'permissionless' LIMIT 1`;
+  const permissionlessResult = await executeQuery<UserTier>(permissionlessQuery, []);
+  const fallbackTier = permissionlessResult.rows[0] || null;
+  return fallbackTier;
+}
+
+/**
+ * Get all available user tiers
+ */
+export async function getAllUserTiers(): Promise<UserTier[]> {
+  const query = 'SELECT * FROM user_tiers ORDER BY token_limit ASC';
+  const result = await executeQuery<UserTier>(query, []);
+  return result.rows;
+}
+
+/**
+ * Update user's tier
+ */
+export async function updateUserTier(userId: string, tierName: string): Promise<boolean> {
+  const query = `
+    UPDATE user_preferences 
+    SET tier_id = (SELECT id FROM user_tiers WHERE name = $2 LIMIT 1), updated_at = NOW()
+    WHERE user_id = $1
+  `;
+  
+  const result = await executeQuery(query, [userId, tierName]);
+  return result.rowCount > 0;
+}
+
+/**
+ * Get models available to user's tier
+ */
+export async function getModelsForUserTier(userId: string): Promise<Model[]> {
+  const query = `
+    SELECT m.* FROM models m
+    JOIN user_tiers ut ON (
+      ut.name = 'pro' OR 
+      (ut.name = 'extended' AND m.tier_requirement IN ('permissionless', 'extended')) OR
+      (ut.name = 'permissionless' AND m.tier_requirement = 'permissionless')
+    )
+    JOIN user_preferences up ON up.tier_id = ut.id
+    WHERE up.user_id = $1 AND m.available = true
+    ORDER BY m.display_order ASC, m.name ASC
+  `;
+  
+  const result = await executeQuery<Model>(query, [userId]);
+  return result.rows;
+}
+
+/**
+ * Get all models (includes all tiers and availability states)
+ */
+export async function getAllModels(): Promise<Model[]> {
+  const query = 'SELECT * FROM models ORDER BY display_order ASC, name ASC';
+  const result = await executeQuery<Model>(query, []);
+  return result.rows;
+}
+
+/**
+ * Get models for a specific tier
+ */
+export async function getModelsForTier(tierName: string): Promise<Model[]> {
+  let tierCondition = '';
+  
+  switch (tierName) {
+    case 'pro':
+      tierCondition = "tier_requirement IN ('permissionless', 'extended', 'pro')";
+      break;
+    case 'extended':
+      tierCondition = "tier_requirement IN ('permissionless', 'extended')";
+      break;
+    case 'permissionless':
+    default:
+      tierCondition = "tier_requirement = 'permissionless'";
+      break;
+  }
+  
+  const query = `
+    SELECT * FROM models 
+    WHERE available = true AND ${tierCondition}
+    ORDER BY display_order ASC, name ASC
+  `;
+  
+  const result = await executeQuery<Model>(query, []);
+  return result.rows;
+}
+
+/**
+ * Get model by model_id (includes token_multiplier for backend use)
+ */
+export async function getModelByModelId(modelId: string): Promise<Model | null> {
+  const query = 'SELECT * FROM models WHERE model_id = $1 AND available = true';
+  const result = await executeQuery<Model>(query, [modelId]);
+  const model = result.rows[0] || null;
+  return model;
+}
+
+/**
+ * Create or update a model (admin function)
+ */
+export async function upsertModel(model: Partial<Model>): Promise<Model | null> {
+  const {
+    model_id, api_id, name, description, tier_requirement, available,
+    token_multiplier, temperature, top_p, token_limit, owned_by,
+    parameters, architecture, hf_repo, about_content, info_content,
+    thumbnail_id, deploy_url, display_order, category, is_api_available, is_chat_available
+  } = model;
+  
+  const query = `
+    INSERT INTO models (
+      model_id, api_id, name, description, tier_requirement, available,
+      token_multiplier, temperature, top_p, token_limit, owned_by,
+      parameters, architecture, hf_repo, about_content, info_content,
+      thumbnail_id, deploy_url, display_order, category, is_api_available, is_chat_available
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+    )
+    ON CONFLICT (model_id) DO UPDATE SET
+      api_id = EXCLUDED.api_id,
+      name = EXCLUDED.name,
+      description = EXCLUDED.description,
+      tier_requirement = EXCLUDED.tier_requirement,
+      available = EXCLUDED.available,
+      token_multiplier = EXCLUDED.token_multiplier,
+      temperature = EXCLUDED.temperature,
+      top_p = EXCLUDED.top_p,
+      token_limit = EXCLUDED.token_limit,
+      owned_by = EXCLUDED.owned_by,
+      parameters = EXCLUDED.parameters,
+      architecture = EXCLUDED.architecture,
+      hf_repo = EXCLUDED.hf_repo,
+      about_content = EXCLUDED.about_content,
+      info_content = EXCLUDED.info_content,
+      thumbnail_id = EXCLUDED.thumbnail_id,
+      deploy_url = EXCLUDED.deploy_url,
+      display_order = EXCLUDED.display_order,
+      category = EXCLUDED.category,
+      is_api_available = EXCLUDED.is_api_available,
+      is_chat_available = EXCLUDED.is_chat_available,
+      updated_at = NOW()
+    RETURNING *
+  `;
+  
+  const values = [
+    model_id, api_id, name, description, tier_requirement || 'permissionless', available !== false,
+    token_multiplier || 1.0, temperature || 0.7, top_p || 0.95, token_limit || 4096,
+    owned_by, parameters, architecture, hf_repo, about_content, info_content,
+    thumbnail_id, deploy_url, display_order || 0, category, is_api_available, is_chat_available
+  ];
+  
+  const result = await executeQuerySingle<Model>(query, values);
+  return result;
+}

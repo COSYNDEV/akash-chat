@@ -78,6 +78,30 @@ export async function loadUserDataFromDatabase(userId: string): Promise<UserData
 }
 
 /**
+ * Deduplicate saved prompts by name and content, keeping the latest version
+ */
+function deduplicatePrompts(prompts: any[]): any[] {
+  const seen = new Map<string, any>();
+  
+  // Process prompts in reverse order to keep the latest ones
+  for (let i = prompts.length - 1; i >= 0; i--) {
+    const prompt = prompts[i];
+    if (!prompt.name || !prompt.content) {continue;}
+    
+    // Create a key based on name and content (case-insensitive)
+    const key = `${prompt.name.toLowerCase().trim()}|${prompt.content.trim()}`;
+    
+    // Only keep if we haven't seen this exact prompt before
+    if (!seen.has(key)) {
+      seen.set(key, prompt);
+    }
+  }
+  
+  // Return deduplicated prompts in original order
+  return Array.from(seen.values()).reverse();
+}
+
+/**
  * Apply loaded data to localStorage for backward compatibility
  */
 export function applyDataToLocalStorage(userData: UserData) {
@@ -147,7 +171,10 @@ export function applyDataToLocalStorage(userData: UserData) {
       );
       
       // Merge database prompts with preserved local prompts
-      const mergedPrompts = [...databasePrompts, ...preservedLocalPrompts];
+      const rawMergedPrompts = [...databasePrompts, ...preservedLocalPrompts];
+      
+      // Deduplicate the merged prompts to remove any duplicates that only differ by ID
+      const mergedPrompts = deduplicatePrompts(rawMergedPrompts);
       
       localStorage.setItem('savedSystemPrompts', JSON.stringify(mergedPrompts));
     }
@@ -204,6 +231,31 @@ export async function hasDataInDatabase(): Promise<boolean> {
  */
 export function clearUserDataCache(): void {
   userDataCache.clear();
+}
+
+/**
+ * Clean up duplicate saved prompts in localStorage
+ * This can be called to fix existing duplicate issues
+ */
+export function cleanupDuplicatePrompts(): void {
+  try {
+    if (typeof window === 'undefined') {return;}
+    
+    const savedPromptsStr = localStorage.getItem('savedSystemPrompts');
+    if (!savedPromptsStr) {return;}
+    
+    const existingPrompts = JSON.parse(savedPromptsStr);
+    if (!Array.isArray(existingPrompts) || existingPrompts.length === 0) {return;}
+    
+    const deduplicatedPrompts = deduplicatePrompts(existingPrompts);
+    
+    // Only update localStorage if we actually removed duplicates
+    if (deduplicatedPrompts.length !== existingPrompts.length) {
+      localStorage.setItem('savedSystemPrompts', JSON.stringify(deduplicatedPrompts));
+    }
+  } catch (error) {
+    console.error('Error cleaning up duplicate prompts:', error);
+  }
 }
 
 /**

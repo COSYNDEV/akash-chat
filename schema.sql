@@ -7,6 +7,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE user_preferences (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id VARCHAR(255) NOT NULL,
+  tier_id UUID REFERENCES user_tiers(id) DEFAULT NULL, -- Will be set to 'free' tier after tiers are created
   selected_model VARCHAR(100),
   temperature NUMERIC(3,2),
   top_p NUMERIC(3,2),
@@ -87,6 +88,63 @@ CREATE TABLE saved_prompts (
   UNIQUE(user_id, name_encrypted)
 );
 
+-- User tiers table for subscription management
+CREATE TABLE user_tiers (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name VARCHAR(50) NOT NULL UNIQUE, -- 'free', 'pro', 'enterprise'
+  display_name VARCHAR(100) NOT NULL, -- 'Free Plan', 'Pro Plan', 'Enterprise Plan'
+  token_limit INTEGER NOT NULL, -- effective token limit after multipliers
+  rate_limit_window_ms INTEGER NOT NULL DEFAULT 14400000, -- 4 hours in milliseconds
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Models table for dynamic model management
+CREATE TABLE models (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  model_id VARCHAR(100) NOT NULL UNIQUE, -- 'DeepSeek-V3.1'
+  api_id VARCHAR(100), -- 'deepseek-ai/DeepSeek-V3.1' for API mapping
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  
+  -- Access Control
+  tier_requirement VARCHAR(50) NOT NULL DEFAULT 'permissionless', -- minimum tier needed
+  available BOOLEAN DEFAULT true,
+  
+  -- HIDDEN Backend Cost Control (not exposed to users)
+  token_multiplier NUMERIC(4,2) NOT NULL DEFAULT 1.00, -- 1.0x, 2.0x, 3.0x
+  
+  -- Model Properties
+  temperature NUMERIC(3,2) DEFAULT 0.7,
+  top_p NUMERIC(3,2) DEFAULT 0.95,
+  token_limit INTEGER DEFAULT 4096,
+  owned_by VARCHAR(100),
+  parameters VARCHAR(50), -- '7B', '13B', '70B'
+  architecture VARCHAR(100), -- 'Transformer', 'MoE'
+  hf_repo VARCHAR(255), -- Hugging Face repository
+  
+  -- UI/Marketing Content
+  about_content TEXT,
+  info_content TEXT,
+  thumbnail_id VARCHAR(50),
+  deploy_url TEXT,
+  display_order INTEGER DEFAULT 0,
+  
+  -- API Availability and Categorization
+  category VARCHAR(100), -- 'reasoning', 'general', 'coding', etc.
+  is_api_available BOOLEAN, -- null = unknown, true/false = explicit
+  is_chat_available BOOLEAN, -- null = unknown, true/false = explicit
+  
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  
+  -- Constraints
+  CHECK (token_multiplier > 0),
+  CHECK (temperature >= 0 AND temperature <= 2),
+  CHECK (top_p >= 0 AND top_p <= 1),
+  CHECK (tier_requirement IN ('permissionless', 'extended', 'pro'))
+);
+
 -- User API keys table for LiteLLM integration
 CREATE TABLE user_api_keys (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -108,6 +166,11 @@ CREATE TABLE user_api_keys (
 
 -- Create Performance Indexes
 CREATE INDEX idx_user_preferences_user_id ON user_preferences(user_id);
+CREATE INDEX idx_user_preferences_tier_id ON user_preferences(tier_id);
+CREATE INDEX idx_user_tiers_name ON user_tiers(name);
+CREATE INDEX idx_models_tier_requirement ON models(tier_requirement, available);
+CREATE INDEX idx_models_available ON models(available) WHERE available = true;
+CREATE INDEX idx_models_display_order ON models(display_order, tier_requirement);
 CREATE INDEX idx_folders_user_id ON folders(user_id);
 CREATE INDEX idx_chat_sessions_user_id ON chat_sessions(user_id, created_at DESC);
 CREATE INDEX idx_chat_sessions_folder_id ON chat_sessions(folder_id);
@@ -119,6 +182,9 @@ CREATE INDEX idx_user_api_keys_last_used ON user_api_keys(last_used_at DESC);
 
 -- Enable Row Level Security (RLS) on all tables
 ALTER TABLE user_preferences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_tiers ENABLE ROW LEVEL SECURITY;
+-- Models table is read-only for users, admin-only writes
+ALTER TABLE models ENABLE ROW LEVEL SECURITY;
 ALTER TABLE folders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
@@ -148,6 +214,14 @@ CREATE POLICY "Users can manage their own chat messages" ON chat_messages
 CREATE POLICY "Users can manage their own saved prompts" ON saved_prompts
   FOR ALL USING (auth.uid()::text = user_id);
 
+-- User Tiers Policy (read-only for users, admin can manage)
+CREATE POLICY "Users can read all user tiers" ON user_tiers
+  FOR SELECT USING (true);
+
+-- Models Policy (read-only for users, admin can manage)  
+CREATE POLICY "Users can read available models" ON models
+  FOR SELECT USING (available = true);
+
 -- API Keys Policy
 CREATE POLICY "Users can manage their own API keys" ON user_api_keys
   FOR ALL USING (auth.uid()::text = user_id);
@@ -176,4 +250,21 @@ CREATE TRIGGER update_saved_prompts_updated_at BEFORE UPDATE ON saved_prompts
 
 CREATE TRIGGER update_user_api_keys_updated_at BEFORE UPDATE ON user_api_keys
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_user_tiers_updated_at BEFORE UPDATE ON user_tiers
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_models_updated_at BEFORE UPDATE ON models
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Insert default user tiers
+INSERT INTO user_tiers (name, display_name, token_limit, rate_limit_window_ms) VALUES
+('permissionless', 'Permissionless', 25000, 14400000),      -- 25K effective tokens, 4 hours
+('extended', 'Extended', 100000, 14400000),       -- 100K effective tokens, 4 hours  
+('pro', 'Pro', 500000, 14400000); -- 500K effective tokens, 4 hours
+
+-- Set default tier for existing users (permissionless tier)
+UPDATE user_preferences SET tier_id = (
+  SELECT id FROM user_tiers WHERE name = 'permissionless' LIMIT 1
+) WHERE tier_id IS NULL;
 
