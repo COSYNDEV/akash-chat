@@ -22,33 +22,44 @@ const openai = createOpenAI({
   compatibility: 'compatible',
   // Inject reasoning content into the stream
   fetch: async (url, options) => {
+    // Inject required kwargs for DeepSeek V3.1 to enable thinking. Workaround for old ai sdk version.
+    const body = JSON.parse(options!.body as string || '{}');
+    if (body.model === 'deepseek-ai/DeepSeek-V3.1' || body.model === 'DeepSeek-V3.1') {
+      options!.body = JSON.stringify({
+        ...body,
+        chat_template_kwargs: {
+          thinking: true
+        }
+      });
+    }
+
     const response = await fetch(url, options);
-    
+
     // Only process streaming responses
     if (response.headers.get('content-type')?.includes('text/event-stream')) {
       let reasoningBuffer = '';
       let isFirstContent = true;
-      
+
       const transformStream = new TransformStream({
         transform(chunk, controller) {
           const chunkText = new TextDecoder().decode(chunk);
           const lines = chunkText.split('\n');
           const modifiedLines: string[] = [];
-          
+
           for (const line of lines) {
             if (line.startsWith('data: ') && line !== 'data: [DONE]') {
               try {
                 const data = JSON.parse(line.slice(6));
-                
+
                 // Capture reasoning content
                 if (data.choices?.[0]?.delta?.reasoning_content) {
                   reasoningBuffer += data.choices[0].delta.reasoning_content;
                 }
-                
+
                 // Inject reasoning before first content
                 if (data.choices?.[0]?.delta?.content && isFirstContent && reasoningBuffer) {
                   isFirstContent = false;
-                  
+
                   const reasoningChunk = {
                     ...data,
                     choices: [{
@@ -59,13 +70,13 @@ const openai = createOpenAI({
                       }
                     }]
                   };
-                  
+
                   modifiedLines.push(`data: ${JSON.stringify(reasoningChunk)}`);
                   modifiedLines.push('');
                 }
-                
+
                 modifiedLines.push(line);
-                
+
               } catch (e) {
                 modifiedLines.push(line);
               }
@@ -73,18 +84,18 @@ const openai = createOpenAI({
               modifiedLines.push(line);
             }
           }
-          
+
           controller.enqueue(new TextEncoder().encode(modifiedLines.join('\n')));
         }
       });
-      
+
       return new Response(response.body?.pipeThrough(transformStream), {
         status: response.status,
         statusText: response.statusText,
         headers: response.headers
       });
     }
-    
+
     return response;
   }
 });
@@ -142,7 +153,7 @@ async function handlePostRequest(req: Request) {
         const tokenLimit = selectedModel?.tokenLimit || 128000;
         const availableTokens = tokenLimit - tokenCount - 1000;
         const errorMessage = "[Message too long for this model. Please try with a shorter message or a different model.]";
-        
+
         if (availableTokens > 100) { // Ensure we have enough tokens for a meaningful truncation
           // Calculate how much content we can actually fit
           const maxContentTokens = availableTokens - 50; // Reserve tokens for truncation notice
@@ -229,7 +240,7 @@ async function handlePostRequest(req: Request) {
   return createDataStreamResponse({
     execute: dataStream => {
       const systemToUse = system || DEFAULT_SYSTEM_PROMPT;
-      
+
       // Map config model ID to API model ID if needed
       const configToApiIdMap = createConfigToApiIdMap();
       const apiModelId = configToApiIdMap.get(model || defaultModel) || model || defaultModel;
