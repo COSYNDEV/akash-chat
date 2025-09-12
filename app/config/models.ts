@@ -39,7 +39,7 @@ With native support for 262K tokens (extensible up to 1M tokens), Qwen3 Next exc
 * 🌐 Decentralized hosting for cost-effective, unrestricted access
 * 🔍 Hybrid Attention architecture for superior long-context performance`,
     thumbnailId: 'llama-3',
-    deployUrl: 'https://console.akash.network/templates/akash-network-awesome-akash-Qwen3-Next-80B-A3B-Instruct'
+    //deployUrl: 'https://console.akash.network/templates/akash-network-awesome-akash-Qwen3-Next-80B-A3B-Instruct'
   },
   {
     id: 'NousResearch-Hermes-4-405B-FP8',
