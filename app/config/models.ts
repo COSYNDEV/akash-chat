@@ -20,6 +20,28 @@ export interface Model {
 
 export const models: Model[] = [
   {
+    id: 'Qwen3-Next-80B-A3B-Instruct',
+    name: 'Qwen3 Next 80B A3B',
+    apiId: 'Qwen/Qwen3-Next-80B-A3B-Instruct',
+    description: 'MoE model with 80B parameters (3B active) and long context',
+    temperature: 0.7,
+    top_p: 0.8,
+    tokenLimit: 262144,
+    parameters: '80B (3B active)',
+    architecture: 'Hybrid Attention with High-Sparsity MoE',
+    hf_repo: 'Qwen/Qwen3-Next-80B-A3B-Instruct',
+    aboutContent: `Experience **Qwen3 Next 80B A3B**, an innovative Mixture-of-Experts model with 80B total parameters and only 3B activated per token. This cutting-edge model features Hybrid Attention combining Gated DeltaNet and Gated Attention, delivering exceptional performance with 10x inference throughput for long contexts.
+
+With native support for 262K tokens (extensible up to 1M tokens), Qwen3 Next excels in knowledge tasks, reasoning, coding, and multilingual applications. The high-sparsity MoE architecture ensures efficient computation while maintaining performance comparable to much larger models.`,
+    infoContent: `
+* ⚡ Revolutionary 80B model with only 3B activation per token
+* 🧠 Ultra-long context support up to 262K tokens (1M with scaling)
+* 🌐 Decentralized hosting for cost-effective, unrestricted access
+* 🔍 Hybrid Attention architecture for superior long-context performance`,
+    thumbnailId: 'llama-3',
+    deployUrl: 'https://console.akash.network/templates/akash-network-awesome-akash-Qwen3-Next-80B-A3B-Instruct'
+  },
+  {
     id: 'NousResearch-Hermes-4-405B-FP8',
     name: 'Hermes 4 405B',
     apiId: 'NousResearch/Hermes-4-405B-FP8',
@@ -354,28 +376,6 @@ With 405 billion parameters, this model excels at deep understanding, long-conte
   * 🔍 Best for lightweight applications, prototyping, and experimentation`,
     thumbnailId: 'llama-3',
     deployUrl: 'https://console.akash.network/templates/akash-network-awesome-akash-Llama-3.1-8B'
-  },
-  {
-    id: 'Qwen3-Next-80B-A3B-Instruct',
-    name: 'Qwen3 Next 80B A3B',
-    apiId: 'Qwen/Qwen3-Next-80B-A3B-Instruct',
-    description: 'Advanced MoE model with 80B parameters (3B active) and ultra-long context',
-    temperature: 0.7,
-    top_p: 0.8,
-    tokenLimit: 262144,
-    parameters: '80B (3B active)',
-    architecture: 'Hybrid Attention with High-Sparsity MoE',
-    hf_repo: 'Qwen/Qwen3-Next-80B-A3B-Instruct',
-    aboutContent: `Experience **Qwen3 Next 80B A3B**, an innovative Mixture-of-Experts model with 80B total parameters and only 3B activated per token. This cutting-edge model features Hybrid Attention combining Gated DeltaNet and Gated Attention, delivering exceptional performance with 10x inference throughput for long contexts.
-
-With native support for 262K tokens (extensible up to 1M tokens), Qwen3 Next excels in knowledge tasks, reasoning, coding, and multilingual applications. The high-sparsity MoE architecture ensures efficient computation while maintaining performance comparable to much larger models.`,
-    infoContent: `
-* ⚡ Revolutionary 80B model with only 3B activation per token
-* 🧠 Ultra-long context support up to 262K tokens (1M with scaling)
-* 🌐 Decentralized hosting for cost-effective, unrestricted access
-* 🔍 Hybrid Attention architecture for superior long-context performance`,
-    thumbnailId: 'llama-3',
-    deployUrl: 'https://console.akash.network/templates/akash-network-awesome-akash-Qwen3-Next-80B-A3B-Instruct'
   },
   {
     id: 'mistral',
