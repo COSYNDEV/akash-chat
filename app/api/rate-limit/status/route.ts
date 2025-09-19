@@ -1,7 +1,7 @@
 import { getSession } from '@auth0/nextjs-auth0';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { checkTokenLimit, getClientIP, getRateLimitConfigForUser } from '@/lib/rate-limit';
+import { checkTokenLimit, getClientIP, getRateLimitConfigForUser, getConversationTokens } from '@/lib/rate-limit';
 
 export async function GET(req: NextRequest) {
   try {
@@ -16,6 +16,8 @@ export async function GET(req: NextRequest) {
         resetTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         blocked: false,
         authenticated: true,
+        conversationTokenPercentage: 0,
+        showConversationWarning: false,
       });
     }
 
@@ -40,6 +42,9 @@ export async function GET(req: NextRequest) {
 
     const rateLimit = await checkTokenLimit(rateLimitIdentifier, rateLimitConfig);
 
+    // Get conversation token information
+    const conversationData = await getConversationTokens(rateLimitIdentifier);
+
     // Calculate usage percentage (0-100)
     const usagePercentage = rateLimit.limit > 0 
       ? Math.round((rateLimit.used / rateLimit.limit) * 100)
@@ -47,12 +52,28 @@ export async function GET(req: NextRequest) {
     
     const remainingPercentage = Math.max(0, 100 - usagePercentage);
 
+    // Calculate conversation token percentage of remaining rate limit
+    let conversationTokenPercentage = 0;
+    let showConversationWarning = false;
+    
+    if (conversationData && conversationData.tokens > 0) {
+      const remainingTokens = rateLimit.limit - rateLimit.used;
+      conversationTokenPercentage = remainingTokens > 0 
+        ? Math.round((conversationData.tokens / remainingTokens) * 100)
+        : 100;
+      
+      // Show warning if conversation tokens consume 30% or more of remaining allowance
+      showConversationWarning = conversationTokenPercentage >= 30;
+    }
+
     return Response.json({
       usagePercentage,
       remainingPercentage,
       resetTime: rateLimit.resetTime.toISOString(),
       blocked: rateLimit.blocked,
       authenticated: isAuthenticated,
+      conversationTokenPercentage,
+      showConversationWarning,
     });
   } catch (error) {
     console.error('Rate limit status error:', error);
@@ -64,6 +85,8 @@ export async function GET(req: NextRequest) {
       resetTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       blocked: false,
       authenticated: false,
+      conversationTokenPercentage: 0,
+      showConversationWarning: false,
     });
   }
 }

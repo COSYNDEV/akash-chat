@@ -3,6 +3,17 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- User tiers table for subscription management
+CREATE TABLE user_tiers (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name VARCHAR(50) NOT NULL UNIQUE, -- 'free', 'pro', 'enterprise'
+  display_name VARCHAR(100) NOT NULL, -- 'Free Plan', 'Pro Plan', 'Enterprise Plan'
+  token_limit INTEGER NOT NULL, -- effective token limit after multipliers
+  rate_limit_window_ms INTEGER NOT NULL DEFAULT 14400000, -- 4 hours in milliseconds
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- User preferences table
 CREATE TABLE user_preferences (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -75,6 +86,7 @@ CREATE TABLE chat_messages (
 CREATE TABLE saved_prompts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id VARCHAR(255) NOT NULL,
+  position INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   name_encrypted TEXT NOT NULL,
@@ -86,17 +98,6 @@ CREATE TABLE saved_prompts (
   
   -- Constraints
   UNIQUE(user_id, name_encrypted)
-);
-
--- User tiers table for subscription management
-CREATE TABLE user_tiers (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name VARCHAR(50) NOT NULL UNIQUE, -- 'free', 'pro', 'enterprise'
-  display_name VARCHAR(100) NOT NULL, -- 'Free Plan', 'Pro Plan', 'Enterprise Plan'
-  token_limit INTEGER NOT NULL, -- effective token limit after multipliers
-  rate_limit_window_ms INTEGER NOT NULL DEFAULT 14400000, -- 4 hours in milliseconds
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Models table for dynamic model management
@@ -260,8 +261,7 @@ CREATE TRIGGER update_models_updated_at BEFORE UPDATE ON models
 -- Insert default user tiers
 INSERT INTO user_tiers (name, display_name, token_limit, rate_limit_window_ms) VALUES
 ('permissionless', 'Permissionless', 25000, 14400000),      -- 25K effective tokens, 4 hours
-('extended', 'Extended', 100000, 14400000),       -- 100K effective tokens, 4 hours  
-('pro', 'Pro', 500000, 14400000); -- 500K effective tokens, 4 hours
+('extended', 'Extended', 100000, 14400000); -- 500K effective tokens, 4 hours
 
 -- Set default tier for existing users (permissionless tier)
 UPDATE user_preferences SET tier_id = (

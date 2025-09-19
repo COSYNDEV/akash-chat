@@ -38,7 +38,7 @@ export function ChatHome() {
     reload,
     stop,
     isPrivateMode,
-    setIsPrivateMode,
+    handlePrivateModeToggle,
     
     // Chat management
     selectedChat,
@@ -130,7 +130,7 @@ export function ChatHome() {
         showStopButton
         setMessages={setMessages}
         isPrivateMode={isPrivateMode}
-        onPrivateModeToggle={() => setIsPrivateMode(!isPrivateMode)}
+        onPrivateModeToggle={handlePrivateModeToggle}
       />
 
       <ModelConfig

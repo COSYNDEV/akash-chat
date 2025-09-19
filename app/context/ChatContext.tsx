@@ -15,6 +15,7 @@ import { useDatabaseSync } from '@/hooks/use-database-sync';
 import { useEncryptedSettings, UserPreferences } from '@/hooks/use-encrypted-settings';
 import { Folder, useFolders } from '@/hooks/use-folders';
 import { useRateLimit } from '@/hooks/use-rate-limit';
+import { checkAndCleanupLocalStorage } from '@/lib/local-storage-manager';
 import { getAccessToken, storeAccessToken, processMessages } from '@/lib/utils';
 
 const SELECTED_MODEL_KEY = 'selectedModel';
@@ -87,6 +88,7 @@ interface ChatContextType {
   stop: () => void;
   isPrivateMode: boolean;
   setIsPrivateMode: (isPrivate: boolean) => void;
+  handlePrivateModeToggle: () => void;
   
   // Chat management
   selectedChat: string | null;
@@ -471,15 +473,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const handleBeforeUnload = () => {
       if (selectedChat) {
         const currentChat = chats.find((c: { id: string; }) => c.id === selectedChat);
-        if (currentChat && currentChat.isPrivate) {
+        // Only cleanup if the chat is private AND private mode is still enabled
+        if (currentChat && currentChat.isPrivate && isPrivateMode) {
           // Remove from localStorage when leaving the page
           const privateChats = JSON.parse(localStorage.getItem('privateChats') || '{}');
           delete privateChats[currentChat.id];
           localStorage.setItem('privateChats', JSON.stringify(privateChats));
         }
       }
-      // Also clean up any other private chats in localStorage
-      localStorage.removeItem('privateChats');
+      // Only clean up private chats in localStorage if private mode is enabled
+      if (isPrivateMode) {
+        localStorage.removeItem('privateChats');
+      }
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -489,28 +494,33 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Also cleanup on component unmount
       if (selectedChat) {
         const currentChat = chats.find((c: { id: string; }) => c.id === selectedChat);
-        if (currentChat && currentChat.isPrivate) {
+        // Only cleanup if the chat is private AND private mode is still enabled
+        if (currentChat && currentChat.isPrivate && isPrivateMode) {
           // Remove from localStorage when component unmounts
           const privateChats = JSON.parse(localStorage.getItem('privateChats') || '{}');
           delete privateChats[currentChat.id];
           localStorage.setItem('privateChats', JSON.stringify(privateChats));
         }
       }
-      // Clean up all private chats in localStorage on unmount
-      localStorage.removeItem('privateChats');
+      // Only clean up private chats in localStorage on unmount if private mode is enabled
+      if (isPrivateMode) {
+        localStorage.removeItem('privateChats');
+      }
     };
-  }, [selectedChat, chats]);
+  }, [selectedChat, chats, isPrivateMode]);
 
-  // Clean up old private chats from localStorage on app startup
+  // Clean up old private chats from localStorage on app startup only if private mode was enabled
   useEffect(() => {
     if (sessionInitialized) {
       const privateChats = JSON.parse(localStorage.getItem('privateChats') || '{}');
       const privateChatCount = Object.keys(privateChats).length;
-      if (privateChatCount > 0) {
+      // Only clean up if there are private chats and we're starting in private mode
+      // This allows chats that had private mode disabled to persist
+      if (privateChatCount > 0 && isPrivateMode) {
         localStorage.removeItem('privateChats');
       }
     }
-  }, [sessionInitialized]);
+  }, [sessionInitialized, isPrivateMode]);
 
   // Effect hooks
   useEffect(() => {
@@ -543,6 +553,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
         setSessionInitialized(true);
+
+        // Check and cleanup local storage if needed
+        checkAndCleanupLocalStorage();
       } catch (error) {
         setSessionError('Unable to establish a secure session. Please try refreshing the page.');
       }
@@ -880,6 +893,30 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const handlePrivateModeToggle = () => {
+    const newPrivateMode = !isPrivateMode;
+    
+    // If disabling private mode and we have a current private chat with messages
+    if (!newPrivateMode && isPrivateMode && selectedChat && messages.length > 0) {
+      const currentChat = chats.find((c: { id: string; }) => c.id === selectedChat);
+      if (currentChat && currentChat.isPrivate) {
+        // Convert private chat to regular chat
+        const newChatId = saveChat(messages, {
+          id: modelSelection,
+          name: availableModels.find((m: Model) => m.id === modelSelection)?.name || modelSelection,
+        }, systemPrompt);
+        
+        // Delete the old private chat
+        deleteChat(selectedChat);
+        
+        // Update to the new regular chat
+        setSelectedChat(newChatId);
+      }
+    }
+    
+    setIsPrivateMode(newPrivateMode);
+  };
+
   // Centralized state reset function for logout
   const resetAllState = useCallback(() => {
     try {
@@ -983,6 +1020,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     stop,
     isPrivateMode,
     setIsPrivateMode,
+    handlePrivateModeToggle,
     
     // Chat management
     selectedChat,

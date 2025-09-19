@@ -238,6 +238,7 @@ export function ChatMessages({
                   onLimitReached={handleLimitReached}
                   isPrivateMode={isPrivateMode}
                   onPrivateModeToggle={onPrivateModeToggle}
+                  hasMessages={false}
                 />
               </div>
             </div>
@@ -308,6 +309,7 @@ export function ChatMessages({
             onLimitReached={handleLimitReached}
             isPrivateMode={isPrivateMode}
             onPrivateModeToggle={onPrivateModeToggle}
+            hasMessages={true}
           />
           <p className="text-xs text-muted-foreground text-center mt-2">
             {AI_NOTICE}

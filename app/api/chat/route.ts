@@ -9,7 +9,7 @@ import { apiEndpoint, apiKey, imgGenFnModel, DEFAULT_SYSTEM_PROMPT } from '@/app
 import { defaultModel, createConfigToApiIdMap } from '@/app/config/models';
 import { withSessionAuth } from '@/lib/auth';
 import { getAvailableModelsForUser } from '@/lib/models';
-import { checkTokenLimit, incrementTokenUsageWithMultiplier, getClientIP, getRateLimitConfigForUser } from '@/lib/rate-limit';
+import { checkTokenLimit, incrementTokenUsageWithMultiplier, getClientIP, getRateLimitConfigForUser, storeConversationTokens } from '@/lib/rate-limit';
 import { LiteLLMService } from '@/lib/services/litellm-service';
 import { generateImageTool } from '@/lib/tools';
 
@@ -273,6 +273,19 @@ async function handlePostRequest(req: NextRequest) {
         role: 'user',
         content: `This is the content of the file ${file.name}: ${file.content}`
       });
+    }
+  }
+
+  // Store conversation token count for rate limit status display
+  if (shouldApplyRateLimit && rateLimitIdentifier) {
+    try {
+      await storeConversationTokens(
+        rateLimitIdentifier, 
+        tokenCount, 
+        selectedModel?.token_limit || 128000
+      );
+    } catch (error) {
+      console.error('Failed to store conversation tokens:', error);
     }
   }
 

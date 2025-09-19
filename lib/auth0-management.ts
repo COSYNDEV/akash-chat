@@ -22,7 +22,7 @@ class Auth0ManagementService {
   private readonly CONSENT_CACHE_KEY = 'auth0:marketing_consent';
 
   private async fetchNewToken(): Promise<Auth0Token> {
-    const issuerBaseUrl = process.env.AUTH0_ISSUER_BASE_URL;
+    const issuerBaseUrl = process.env.AUTH0_MGMT_BASE_URL || process.env.AUTH0_ISSUER_BASE_URL;
     if (!issuerBaseUrl) {
       throw new Error('Missing AUTH0_ISSUER_BASE_URL');
     }
@@ -154,7 +154,7 @@ class Auth0ManagementService {
 
   async getUserData(userId: string): Promise<any> {
     const token = await this.getToken();
-    const issuerBaseUrl = process.env.AUTH0_ISSUER_BASE_URL;
+    const issuerBaseUrl = process.env.AUTH0_MGMT_BASE_URL || process.env.AUTH0_ISSUER_BASE_URL;
     
     const response = await fetch(`${issuerBaseUrl}/api/v2/users/${encodeURIComponent(userId)}`, {
       method: 'GET',
@@ -194,7 +194,7 @@ class Auth0ManagementService {
    // currently unused 
   async updateUserMetadata(userId: string, metadata: Record<string, any>): Promise<void> {
     const token = await this.getToken();
-    const issuerBaseUrl = process.env.AUTH0_ISSUER_BASE_URL;
+    const issuerBaseUrl = process.env.AUTH0_MGMT_BASE_URL || process.env.AUTH0_ISSUER_BASE_URL;
     
     const response = await fetch(`${issuerBaseUrl}/api/v2/users/${encodeURIComponent(userId)}`, {
       method: 'PATCH',

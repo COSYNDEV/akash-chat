@@ -31,6 +31,7 @@ interface ChatInputProps {
   onLimitReached?: (reached: boolean) => void;
   isPrivateMode?: boolean;
   onPrivateModeToggle?: () => void;
+  hasMessages?: boolean;
 }
 
 export function ChatInput({
@@ -48,6 +49,7 @@ export function ChatInput({
   onLimitReached,
   isPrivateMode = false,
   onPrivateModeToggle,
+  hasMessages = false,
 }: ChatInputProps) {
   const { user } = useUser();
   const isAuthenticated = !!user;
@@ -121,10 +123,13 @@ export function ChatInput({
   };
 
   // Use centralized rate limit hook
-  const { usagePercentage, remainingPercentage, resetTime, blocked } = useRateLimit();
+  const { usagePercentage, remainingPercentage, resetTime, blocked, conversationTokenPercentage, showConversationWarning } = useRateLimit();
   
   // Calculate if close to rate limit (above 90% usage)
-  const isNearLimit = !user?.sub && usagePercentage >= 90 && !blocked;
+  const isNearRateLimit = !user?.sub && usagePercentage >= 90 && !blocked;
+  
+  // Show indicator for either rate limit or long conversation (server determines this)
+  const shouldShowIndicator = isNearRateLimit || showConversationWarning;
   
   useEffect(() => {
     setLimitInfo({ usagePercentage, remainingPercentage, resetTime });
@@ -352,7 +357,7 @@ export function ChatInput({
               </button>
               
               {/* Private chat toggle button */}
-              {onPrivateModeToggle && (
+              {onPrivateModeToggle && (!hasMessages || isPrivateMode) && (
                 <button
                   type="button"
                   onClick={onPrivateModeToggle}
@@ -375,14 +380,18 @@ export function ChatInput({
             
             {/* Submit/Stop button on the right */}
             <div className="flex items-center gap-1">
-            {/* Rate limit icon for unauthenticated users */}
-            {!user?.sub && isNearLimit && (
+            {/* Rate limit/conversation token indicator */}
+            {shouldShowIndicator && (
               <TooltipProvider>
                 <Tooltip open={showRateLimitTooltip} onOpenChange={setShowRateLimitTooltip}>
                   <TooltipTrigger asChild>
                     <button
                       type="button"
-                      className="composer-btn flex h-8 w-8 items-center justify-center rounded-full text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300 transition-colors cursor-pointer"
+                      className={`composer-btn flex h-8 w-8 items-center justify-center rounded-full transition-colors cursor-pointer ${
+                        isNearRateLimit 
+                          ? "text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300"
+                          : "text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                      }`}
                       onClick={(e) => {
                         e.preventDefault();
                         setShowRateLimitTooltip(!showRateLimitTooltip);
@@ -394,7 +403,15 @@ export function ChatInput({
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="top">
-                  <p>{remainingPercentage === 0 ? '<1' : remainingPercentage}% of your token limit remaining</p>                  </TooltipContent>
+                    <div className="space-y-1">
+                      {showConversationWarning && (
+                        <p>Next message will use {conversationTokenPercentage}% of your remaining limit</p>
+                      )}
+                      {isNearRateLimit && (
+                        <p>{remainingPercentage === 0 ? '<1' : remainingPercentage}% of your rate limit remaining</p>
+                      )}
+                    </div>
+                  </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             )}

@@ -8,7 +8,6 @@ import { validateChatSession, validateChatMessage } from '@/lib/validation';
 
 export const POST = withErrorHandling(
   requireAuth(async (request: NextRequest, userId: string, _user: any) => {
-    // Parse and validate request body manually for better error handling
     let chatData;
     try {
       const body = await request.text();

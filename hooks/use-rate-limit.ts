@@ -14,6 +14,8 @@ interface RateLimitStatus {
   authenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  conversationTokenPercentage: number;
+  showConversationWarning: boolean;
 }
 
 // Singleton state to share across all components
@@ -52,6 +54,8 @@ async function fetchRateLimitStatus(): Promise<void> {
           authenticated: data.authenticated || false,
           isLoading: false,
           error: null,
+          conversationTokenPercentage: data.conversationTokenPercentage || 0,
+          showConversationWarning: data.showConversationWarning || false,
         };
         
         globalRateLimitState = newState;
@@ -72,6 +76,8 @@ async function fetchRateLimitStatus(): Promise<void> {
         authenticated: false,
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to fetch rate limit',
+        conversationTokenPercentage: 0,
+        showConversationWarning: false,
       };
       
       globalRateLimitState = errorState;
@@ -95,6 +101,8 @@ export function useRateLimit() {
       authenticated: false,
       isLoading: true,
       error: null,
+      conversationTokenPercentage: 0,
+      showConversationWarning: false,
     }
   );
 

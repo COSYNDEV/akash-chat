@@ -235,14 +235,69 @@ export async function checkTokenLimit(
 }
 
 /**
+ * Store conversation token count for rate limit status display
+ */
+export async function storeConversationTokens(
+  identifier: string,
+  tokenCount: number,
+  modelTokenLimit: number
+): Promise<void> {
+  const conversationKey = `conversation_tokens:${identifier}`;
+  const ttlSeconds = 4 * 60 * 60;
+  
+  try {
+    const data = JSON.stringify({
+      tokens: tokenCount,
+      modelLimit: modelTokenLimit,
+      timestamp: Date.now()
+    });
+    
+    await redis.setex(conversationKey, ttlSeconds, data);
+  } catch (error) {
+    console.error('Failed to store conversation tokens:', error);
+  }
+}
+
+/**
+ * Get stored conversation token count
+ */
+export async function getConversationTokens(identifier: string): Promise<{
+  tokens: number;
+  modelLimit: number;
+  timestamp: number;
+} | null> {
+  const conversationKey = `conversation_tokens:${identifier}`;
+  
+  try {
+    const data = await redis.get(conversationKey);
+    if (!data) {
+      return null;
+    }
+    
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Failed to get conversation tokens:', error);
+    return null;
+  }
+}
+
+/**
  * Get client IP address from request headers
  */
 export function getClientIP(request: Request): string {
   // Only use the reliable X-Original-Chat-Forwarded-For header set by Caddy
   const originalChatForwarded = request.headers.get('X-Original-Chat-Forwarded-For');
+  const cloudflareForwarded = request.headers.get('CF-Connecting-IP');
+
+  console.log('originalChatForwarded', originalChatForwarded);
+  console.log('cloudflareForwarded', cloudflareForwarded);
   
   if (originalChatForwarded) {
     const ip = originalChatForwarded.split(',')[0].trim();
+    // Remove port if present (e.g., "162.158.172.8:59694" -> "162.158.172.8")
+    return ip.split(':')[0];
+  } else if (cloudflareForwarded) {
+    const ip = cloudflareForwarded.split(',')[0].trim();
     // Remove port if present (e.g., "162.158.172.8:59694" -> "162.158.172.8")
     return ip.split(':')[0];
   }
