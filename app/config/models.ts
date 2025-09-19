@@ -25,6 +25,50 @@ export interface Model {
 
 export const models: Model[] = [
   {
+    id: 'Qwen3-Next-80B-A3B-Instruct',
+    name: 'Qwen3 Next 80B A3B',
+    apiId: 'Qwen/Qwen3-Next-80B-A3B-Instruct',
+    description: 'MoE model with 80B parameters (3B active) and long context',
+    temperature: 0.7,
+    top_p: 0.8,
+    tokenLimit: 262144,
+    parameters: '80B (3B active)',
+    architecture: 'Hybrid Attention with High-Sparsity MoE',
+    hf_repo: 'Qwen/Qwen3-Next-80B-A3B-Instruct',
+    aboutContent: `Experience **Qwen3 Next 80B A3B**, an innovative Mixture-of-Experts model with 80B total parameters and only 3B activated per token. This cutting-edge model features Hybrid Attention combining Gated DeltaNet and Gated Attention, delivering exceptional performance with 10x inference throughput for long contexts.
+
+With native support for 262K tokens (extensible up to 1M tokens), Qwen3 Next excels in knowledge tasks, reasoning, coding, and multilingual applications. The high-sparsity MoE architecture ensures efficient computation while maintaining performance comparable to much larger models.`,
+    infoContent: `
+* ⚡ Revolutionary 80B model with only 3B activation per token
+* 🧠 Ultra-long context support up to 262K tokens (1M with scaling)
+* 🌐 Decentralized hosting for cost-effective, unrestricted access
+* 🔍 Hybrid Attention architecture for superior long-context performance`,
+    thumbnailId: 'llama-3',
+    //deployUrl: 'https://console.akash.network/templates/akash-network-awesome-akash-Qwen3-Next-80B-A3B-Instruct'
+  },
+  {
+    id: 'NousResearch-Hermes-4-405B-FP8',
+    name: 'Hermes 4 405B',
+    apiId: 'NousResearch/Hermes-4-405B-FP8',
+    description: 'Frontier reasoning model with hybrid mode capabilities',
+    temperature: 0.6,
+    top_p: 0.9,
+    tokenLimit: 65536,
+    parameters: '405B',
+    architecture: 'Llama-3.1-405B with reasoning enhancement',
+    hf_repo: 'NousResearch/Hermes-4-405B-FP8',
+    aboutContent: `Experience **Hermes 4 405B FP8**, Nous Research's frontier reasoning model built on Llama-3.1-405B. This advanced model features hybrid mode capabilities with deliberation reasoning using <think>...</think> tags, delivering exceptional performance in math, code, STEM, logic, and creative tasks.
+
+Hermes 4 excels in function calling, tool use, schema adherence, and structured JSON outputs while maintaining reduced refusal rates and high steerability. The FP8 quantized version provides efficient deployment without compromising on the model's advanced reasoning capabilities.`,
+    infoContent: `
+* ⚡ Advanced reasoning with deliberation mode support
+* 🧠 Function calling and tool use capabilities
+* 🌐 Decentralized hosting for lower costs & full control
+* 🔍 Optimized for math, code, STEM, logic, and creative tasks`,
+    thumbnailId: 'llama-3',
+    deployUrl: 'https://console.akash.network/templates/akash-network-awesome-akash-Hermes-4-405B-FP8'
+  },
+  {
     id: 'DeepSeek-V3.1',
     name: 'DeepSeek V3.1',
     apiId: 'deepseek-ai/DeepSeek-V3.1',
@@ -44,7 +88,7 @@ DeepSeek V3.1 features improved training methodologies, enhanced reasoning capab
 * 🌐 Decentralized hosting for cost-effective, unrestricted access
 * 🔍 Optimized for coding, mathematics, reasoning, and creative tasks`,
     thumbnailId: 'deepseek',
-    //deployUrl: 'https://console.akash.network/templates/akash-network-awesome-akash-DeepSeek-V3.1'
+    deployUrl: 'https://console.akash.network/templates/akash-network-awesome-akash-DeepSeek-V3.1'
   },
   {
     id: 'openai-gpt-oss-120b',
@@ -377,7 +421,7 @@ With 405 billion parameters, this model excels at deep understanding, long-conte
 ];
 
 // in case the `DEFAULT_MODEL` environment variable is not set or set to an unsupported model
-export const fallbackModelID = 'DeepSeek-V3.1';
+export const fallbackModelID = 'Qwen3-Next-80B-A3B-Instruct';
 export const defaultModel = process.env.DEFAULT_MODEL || fallbackModelID;
 
 /**
