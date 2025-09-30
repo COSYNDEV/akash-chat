@@ -1,3 +1,4 @@
+import { useUser } from '@auth0/nextjs-auth0/client';
 import { LogIn, Clock } from 'lucide-react';
 
 import { Button } from "../ui/button";
@@ -7,6 +8,8 @@ interface RateLimitMessageProps {
 }
 
 export function RateLimitMessage({ getTimeRemaining }: RateLimitMessageProps) {
+  const { user } = useUser();
+  const isAuthenticated = !!user;
   return (
     <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 space-y-3 min-h-[24px] flex flex-col justify-center">
       <div className="flex items-center justify-center gap-2 text-destructive font-medium text-sm">
@@ -22,17 +25,19 @@ export function RateLimitMessage({ getTimeRemaining }: RateLimitMessageProps) {
           <span>Resets in {getTimeRemaining()}</span>
         </div>
       </div>
-      
-      <Button 
-        size="sm" 
-        className="w-full h-8 text-xs"
-        onClick={() => {
-          window.location.href = '/api/auth/login';
-        }}
-      >
-        <LogIn className="w-3 h-3 mr-2" />
-        Sign in for extended access
-      </Button>
+
+      {!isAuthenticated && (
+        <Button
+          size="sm"
+          className="w-full h-8 text-xs"
+          onClick={() => {
+            window.location.href = '/api/auth/login';
+          }}
+        >
+          <LogIn className="w-3 h-3 mr-2" />
+          Sign in for extended access
+        </Button>
+      )}
     </div>
   );
 } 

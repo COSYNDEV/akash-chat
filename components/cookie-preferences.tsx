@@ -5,9 +5,9 @@ import { useState, useEffect } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { safeSetItem } from '@/lib/local-storage-manager';
 
 import { getCookieConsent } from './cookie-banner';
-import { safeSetItem } from '@/lib/local-storage-manager';
 
 interface CookiePreferencesProps {
   isOpen: boolean;

@@ -1,6 +1,7 @@
 import type { Message as AIMessage } from 'ai';
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+
 import { safeSetItem } from '@/lib/local-storage-manager';
 
 export function cn(...inputs: ClassValue[]) {

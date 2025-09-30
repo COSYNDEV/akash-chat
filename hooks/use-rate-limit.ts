@@ -148,9 +148,13 @@ export function useRateLimit() {
 
   // Event-based tracking functions
   const trackMessageSuccess = useCallback(async (tokenUsage?: { promptTokens: number; completionTokens: number }) => {
+    // Add delay to ensure server has finished updating rate limit
+    // Server updates in result.usage.then() which happens after stream completes
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     // Update rate limit after successful message
     await forceRefresh();
-    
+
     if (tokenUsage && process.env.NODE_ENV === 'development') {
       console.log('Message succeeded with token usage:', tokenUsage);
     }

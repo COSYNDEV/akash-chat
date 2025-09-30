@@ -1,3 +1,5 @@
+import { safeSetItem } from '@/lib/local-storage-manager';
+
 import {
   getUserPreferences,
   upsertUserPreferences,
@@ -8,7 +10,6 @@ import {
   reorderSavedPrompts
 } from './database';
 import { createEncryptionService } from './services/encryption-service';
-import { safeSetItem } from '@/lib/local-storage-manager';
 
 export interface DecryptedUserPreferences {
   selected_model?: string;

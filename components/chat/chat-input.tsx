@@ -1,4 +1,3 @@
-import { useUser } from '@auth0/nextjs-auth0/client';
 import { Mic, MicOff, LoaderCircle, Paperclip, X, Plus, Lock, LockOpen } from 'lucide-react';
 import { useState, useRef, useEffect } from "react";
 
@@ -46,17 +45,10 @@ export function ChatInput({
   contextFiles = [],
   isInitialized = false,
   isLimitReached = false,
-  onLimitReached,
   isPrivateMode = false,
   onPrivateModeToggle,
   hasMessages = false,
 }: ChatInputProps) {
-  const { user } = useUser();
-  const isAuthenticated = !!user;
-  
-  // Authenticated users bypass rate limiting
-  const effectiveIsLimitReached = isLimitReached && !isAuthenticated;
-  
   const { isRecording, isConnecting, connectionPossible, startRecording, stopRecording } = useWebSocketTranscription({
     onTranscription: (transcriptionText:string) => {
       let newChatContent = input;
@@ -82,7 +74,6 @@ export function ChatInput({
   });
   
   const [showFileUpload, setShowFileUpload] = useState(false);
-  const [limitInfo, setLimitInfo] = useState<{ usagePercentage: number; remainingPercentage: number; resetTime: Date } | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [previousInput, setPreviousInput] = useState(input);
@@ -101,9 +92,9 @@ export function ChatInput({
 
   // Calculate live time remaining
   const getTimeRemaining = () => {
-    if (!limitInfo) {return '...';}
-    
-    const diff = limitInfo.resetTime.getTime() - currentTime.getTime();
+    if (!resetTime) {return '...';}
+
+    const diff = resetTime.getTime() - currentTime.getTime();
     
     if (diff <= 0) {
       return 'now';
@@ -124,39 +115,20 @@ export function ChatInput({
 
   // Use centralized rate limit hook
   const { usagePercentage, remainingPercentage, resetTime, blocked, conversationTokenPercentage, showConversationWarning } = useRateLimit();
-  
-  // Calculate if close to rate limit (above 90% usage)
-  const isNearRateLimit = !user?.sub && usagePercentage >= 90 && !blocked;
-  
-  // Show indicator for either rate limit or long conversation (server determines this)
-  const shouldShowIndicator = isNearRateLimit || showConversationWarning;
-  
-  useEffect(() => {
-    setLimitInfo({ usagePercentage, remainingPercentage, resetTime });
-    if (onLimitReached && blocked !== isLimitReached) {
-      onLimitReached(blocked);
-    }
-  }, [usagePercentage, remainingPercentage, resetTime, blocked, onLimitReached, isLimitReached]);
+  const isNearRateLimit = usagePercentage >= 90 && remainingPercentage > 0 && remainingPercentage <= 10 && !blocked;
+
+  const shouldShowIndicator = isNearRateLimit || (showConversationWarning && hasMessages);
 
   // Update current time every second when limit is reached for live countdown
   useEffect(() => {
-    if (isLimitReached && limitInfo) {
+    if (isLimitReached) {
       const interval = setInterval(() => {
         setCurrentTime(new Date());
       }, 1000);
-      
+
       return () => clearInterval(interval);
     }
-  }, [isLimitReached, limitInfo]);
-
-  // Clear limit when user becomes authenticated
-  useEffect(() => {
-    if (isAuthenticated && isLimitReached && onLimitReached) {
-      // User just logged in, clear the rate limit
-      onLimitReached(false);
-      setLimitInfo(null);
-    }
-  }, [isAuthenticated, isLimitReached, onLimitReached]);
+  }, [isLimitReached]);
 
   const handleRemoveFile = (fileId: string) => {
     if (onFilesChange) {
@@ -282,7 +254,7 @@ export function ChatInput({
       <div className="relative flex w-full flex-col border border-input rounded-2xl bg-background">
         {/* Text input area or rate limit message */}
         <div className="px-3 pt-3 pb-2">
-          {effectiveIsLimitReached ? (
+          {isLimitReached ? (
             <RateLimitMessage getTimeRemaining={getTimeRemaining} />
           ) : (
             <>
@@ -337,9 +309,9 @@ export function ChatInput({
             </>
           )}
         </div>
-        
+
         {/* Action buttons row */}
-        {!effectiveIsLimitReached && (
+        {!isLimitReached && (
           <div className="flex items-center justify-between px-3 pb-3">
             <div className="flex items-center gap-1">
               {/* File upload button */}
@@ -404,11 +376,14 @@ export function ChatInput({
                   </TooltipTrigger>
                   <TooltipContent side="top">
                     <div className="space-y-1">
-                      {showConversationWarning && (
-                        <p>Next message will use {conversationTokenPercentage}% of your remaining limit</p>
+                      {showConversationWarning && hasMessages && (
+                        <p>Next message will use {conversationTokenPercentage > 100 ? '>100' : conversationTokenPercentage}% of your remaining limit</p>
                       )}
                       {isNearRateLimit && (
-                        <p>{remainingPercentage === 0 ? '<1' : remainingPercentage}% of your rate limit remaining</p>
+                        <p>{(() => {
+                          if (remainingPercentage <= 0) {return '<1';}
+                          return remainingPercentage;
+                        })()}% of your rate limit remaining</p>
                       )}
                     </div>
                   </TooltipContent>

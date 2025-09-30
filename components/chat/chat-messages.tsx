@@ -55,7 +55,6 @@ export function ChatMessages({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
-  const [isLimitReached, setIsLimitReached] = useState(false);
   const { width: windowWidth } = useWindowSize();
   const isMobile = windowWidth ? windowWidth < 768 : false;
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
@@ -199,15 +198,6 @@ export function ChatMessages({
 
   // Use centralized rate limit hook
   const { blocked } = useRateLimit();
-  
-  useEffect(() => {
-    setIsLimitReached(blocked);
-  }, [blocked]);
-
-  // Handle limit reached callback from chat input
-  const handleLimitReached = (reached: boolean) => {
-    setIsLimitReached(reached);
-  };
 
   return (
     <>
@@ -234,8 +224,7 @@ export function ChatMessages({
                   contextFiles={contextFiles}
                   className="relative"
                   isInitialized={sessionInitialized}
-                  isLimitReached={isLimitReached}
-                  onLimitReached={handleLimitReached}
+                  isLimitReached={blocked}
                   isPrivateMode={isPrivateMode}
                   onPrivateModeToggle={onPrivateModeToggle}
                   hasMessages={false}
@@ -305,8 +294,7 @@ export function ChatMessages({
             className="max-w-3xl mx-auto"
             showStopButton={showStopButton}
             isInitialized={sessionInitialized}
-            isLimitReached={isLimitReached}
-            onLimitReached={handleLimitReached}
+            isLimitReached={blocked}
             isPrivateMode={isPrivateMode}
             onPrivateModeToggle={onPrivateModeToggle}
             hasMessages={true}
