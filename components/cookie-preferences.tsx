@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 import { getCookieConsent } from './cookie-banner';
+import { safeSetItem } from '@/lib/local-storage-manager';
 
 interface CookiePreferencesProps {
   isOpen: boolean;
@@ -22,7 +23,7 @@ export function CookiePreferences({ isOpen, onClose }: CookiePreferencesProps) {
   }, [isOpen]);
 
   const handleSave = () => {
-    localStorage.setItem('cookie-consent', analyticsEnabled ? 'accepted' : 'declined');
+    safeSetItem('cookie-consent', analyticsEnabled ? 'accepted' : 'declined');
     
     if (!analyticsEnabled && typeof window !== 'undefined' && (window as unknown as { gtag?: Function }).gtag) {
       (window as unknown as { gtag: Function }).gtag('consent', 'update', {
@@ -42,7 +43,7 @@ export function CookiePreferences({ isOpen, onClose }: CookiePreferencesProps) {
 
   const handleAcceptAll = () => {
     setAnalyticsEnabled(true);
-    localStorage.setItem('cookie-consent', 'accepted');
+    safeSetItem('cookie-consent', 'accepted');
     
     // Enable Google Analytics consent
     if (typeof window !== 'undefined' && (window as unknown as { gtag?: Function }).gtag) {

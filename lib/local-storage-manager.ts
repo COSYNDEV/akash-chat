@@ -6,6 +6,25 @@ interface LocalStorageSize {
   }>;
 }
 
+interface StorageResult {
+  success: boolean;
+  error?: string;
+}
+
+// Global error notification system
+let errorNotificationCallback: ((message: string) => void) | null = null;
+
+export function setStorageErrorHandler(callback: (message: string) => void) {
+  errorNotificationCallback = callback;
+}
+
+function notifyStorageError(message: string) {
+  console.error('Storage error:', message);
+  if (errorNotificationCallback) {
+    errorNotificationCallback(message);
+  }
+}
+
 const STORAGE_THRESHOLD_MB = 4; // 4MB threshold
 const STORAGE_THRESHOLD_BYTES = STORAGE_THRESHOLD_MB * 1024 * 1024;
 
@@ -38,7 +57,7 @@ function formatSize(bytes: number): string {
   return `${kb.toFixed(2)} KB`;
 }
 
-function cleanupChatMessages(): boolean {
+export function cleanupChatMessages(): boolean {
   try {
     const chatsData = localStorage.getItem('chats');
     if (!chatsData) {return false;}
@@ -98,7 +117,7 @@ function cleanupChatMessages(): boolean {
   }
 }
 
-function cleanupPrivateChats(): boolean {
+export function cleanupPrivateChats(): boolean {
   try {
     const privateChatsData = localStorage.getItem('privateChats');
     if (!privateChatsData) {return false;}
@@ -116,47 +135,19 @@ function cleanupPrivateChats(): boolean {
   }
 }
 
-export function checkAndCleanupLocalStorage(): void {
+export function checkStorageSize(): { isOverLimit: boolean; size: LocalStorageSize } {
   try {
     const storageInfo = calculateLocalStorageSize();
+    const isOverLimit = storageInfo.totalSize > STORAGE_THRESHOLD_BYTES;
 
-    if (storageInfo.totalSize > STORAGE_THRESHOLD_BYTES) {
-      console.warn('Local storage size exceeded threshold, starting cleanup...');
-
-      let cleanupPerformed = false;
-
-      // Step 1: Clean up private chats first (they're temporary)
-      if (cleanupPrivateChats()) {
-        cleanupPerformed = true;
-      }
-
-      // Step 2: Check size again
-      const sizeAfterPrivateCleanup = calculateLocalStorageSize().totalSize;
-
-      // Step 3: If still over threshold, clean up chat messages
-      if (sizeAfterPrivateCleanup > STORAGE_THRESHOLD_BYTES) {
-        if (cleanupChatMessages()) {
-          cleanupPerformed = true;
-        }
-      }
-
-      const finalSize = calculateLocalStorageSize().totalSize;
-
-      if (cleanupPerformed) {
-        console.log(`Local storage cleanup completed. Final size: ${formatSize(finalSize)}`);
-
-        // Show user notification about cleanup
-        const sizeReduced = storageInfo.totalSize - finalSize;
-        if (sizeReduced > 0) {
-          // You could show a toast notification here
-          console.log(`Freed up ${formatSize(sizeReduced)} of local storage space by cleaning up old chat messages.`);
-        }
-      } else {
-        console.warn('Unable to reduce local storage size below threshold');
-      }
+    if (isOverLimit) {
+      console.warn(`Local storage size (${formatSize(storageInfo.totalSize)}) exceeded threshold (${formatSize(STORAGE_THRESHOLD_BYTES)})`);
     }
+
+    return { isOverLimit, size: storageInfo };
   } catch (error) {
     console.error('Error checking local storage:', error);
+    return { isOverLimit: false, size: { totalSize: 0, keys: [] } };
   }
 }
 
@@ -167,4 +158,26 @@ export function getLocalStorageInfo(): LocalStorageSize {
 export function isStorageNearLimit(): boolean {
   const { totalSize } = calculateLocalStorageSize();
   return totalSize > STORAGE_THRESHOLD_BYTES * 0.9; // 90% of threshold
+}
+
+export function safeSetItem(key: string, value: string): StorageResult {
+  try {
+    localStorage.setItem(key, value);
+    return { success: true };
+  } catch (error) {
+    let errorMessage: string;
+
+    if (error instanceof Error && error.name === 'QuotaExceededError') {
+      errorMessage = 'Storage quota exceeded. Please clear some chat history to continue.';
+    } else {
+      errorMessage = 'Unable to save data to local storage.';
+    }
+
+    notifyStorageError(errorMessage);
+
+    return {
+      success: false,
+      error: errorMessage
+    };
+  }
 }

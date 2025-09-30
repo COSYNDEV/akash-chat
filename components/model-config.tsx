@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Textarea } from "@/components/ui/textarea";
 import { useEncryptedSettings } from '@/hooks/use-encrypted-settings';
 import { trackEvent } from '@/lib/analytics';
+import { safeSetItem } from '@/lib/local-storage-manager';
 
 interface ModelConfigProps {
   open: boolean;
@@ -196,7 +197,7 @@ export function ModelConfig({
     
     // Update localStorage if migration was needed
     if (needsUpdate) {
-      localStorage.setItem('savedSystemPrompts', JSON.stringify(localPrompts));
+      safeSetItem('savedSystemPrompts', JSON.stringify(localPrompts));
     }
     
     setLocalSavedPrompts(localPrompts);
@@ -250,7 +251,7 @@ export function ModelConfig({
         synced: false 
       };
       savedPrompts.push(newPrompt);
-      localStorage.setItem('savedSystemPrompts', JSON.stringify(savedPrompts));
+      safeSetItem('savedSystemPrompts', JSON.stringify(savedPrompts));
       setLocalSavedPrompts(savedPrompts); // Update local state
       setPromptName('');
       setShowSaveInput(false);
@@ -272,7 +273,7 @@ export function ModelConfig({
         source: 'database',
         synced: true
       });
-      localStorage.setItem('savedSystemPrompts', JSON.stringify(savedPrompts));
+      safeSetItem('savedSystemPrompts', JSON.stringify(savedPrompts));
       setLocalSavedPrompts(savedPrompts);
     } catch (error) {
       console.warn(`Failed to save prompt "${promptName}" to database:`, error);
@@ -288,7 +289,7 @@ export function ModelConfig({
       const savedPromptsStr = localStorage.getItem('savedSystemPrompts');
       let savedPrompts: SavedPrompt[] = savedPromptsStr ? JSON.parse(savedPromptsStr) : [];
       savedPrompts = savedPrompts.filter(p => p.id !== promptIdOrName);
-      localStorage.setItem('savedSystemPrompts', JSON.stringify(savedPrompts));
+      safeSetItem('savedSystemPrompts', JSON.stringify(savedPrompts));
       setLocalSavedPrompts(savedPrompts); // Update local state
       setSelectedPromptName(null);
       return;

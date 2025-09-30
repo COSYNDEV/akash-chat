@@ -1,4 +1,5 @@
 import { DEFAULT_SYSTEM_PROMPT } from "@/app/config/api";
+import { safeSetItem } from '@/lib/local-storage-manager';
 
 // Simple in-memory cache for user data
 const userDataCache = new Map<string, { data: UserData; timestamp: number; ttl: number }>();
@@ -107,16 +108,16 @@ function deduplicatePrompts(prompts: any[]): any[] {
 export function applyDataToLocalStorage(userData: UserData) {
     // Apply preferences
     if (userData.preferences.selectedModel) {
-      localStorage.setItem('selectedModel', userData.preferences.selectedModel);
+      safeSetItem('selectedModel', userData.preferences.selectedModel);
     }
     if (userData.preferences.systemPrompt) {
-      localStorage.setItem('currentSystemPrompt', userData.preferences.systemPrompt);
+      safeSetItem('currentSystemPrompt', userData.preferences.systemPrompt);
     }
     if (userData.preferences.temperature !== undefined && userData.preferences.temperature !== null) {
-      localStorage.setItem('currentTemperature', userData.preferences.temperature.toString());
+      safeSetItem('currentTemperature', userData.preferences.temperature.toString());
     }
     if (userData.preferences.topP !== undefined && userData.preferences.topP !== null) {
-      localStorage.setItem('currentTopP', userData.preferences.topP.toString());
+      safeSetItem('currentTopP', userData.preferences.topP.toString());
     }
 
     // Apply folders (merge database folders with existing local folders)
@@ -144,7 +145,7 @@ export function applyDataToLocalStorage(userData: UserData) {
       // Merge database folders with preserved local folders
       const mergedFolders = [...databaseFolders, ...preservedLocalFolders];
       
-      localStorage.setItem('folders', JSON.stringify(mergedFolders));
+      safeSetItem('folders', JSON.stringify(mergedFolders));
     }
 
     // Apply saved prompts from database to localStorage (preserving existing local prompts)
@@ -176,7 +177,7 @@ export function applyDataToLocalStorage(userData: UserData) {
       // Deduplicate the merged prompts to remove any duplicates that only differ by ID
       const mergedPrompts = deduplicatePrompts(rawMergedPrompts);
       
-      localStorage.setItem('savedSystemPrompts', JSON.stringify(mergedPrompts));
+      safeSetItem('savedSystemPrompts', JSON.stringify(mergedPrompts));
     }
 }
 
@@ -251,7 +252,7 @@ export function cleanupDuplicatePrompts(): void {
     
     // Only update localStorage if we actually removed duplicates
     if (deduplicatedPrompts.length !== existingPrompts.length) {
-      localStorage.setItem('savedSystemPrompts', JSON.stringify(deduplicatedPrompts));
+      safeSetItem('savedSystemPrompts', JSON.stringify(deduplicatedPrompts));
     }
   } catch (error) {
     console.error('Error cleaning up duplicate prompts:', error);
@@ -269,12 +270,12 @@ export function clearUserChatsFromLocalStorage(): void {
       try {
         const chats = JSON.parse(chatsStr);
         // Keep only local chats that haven't been synced to database
-        const localChats = chats.filter((chat: any) => 
+        const localChats = chats.filter((chat: any) =>
           chat.source === 'local' && !chat.databaseId
         );
-        
+
         if (localChats.length > 0) {
-          localStorage.setItem('chats', JSON.stringify(localChats));
+          safeSetItem('chats', JSON.stringify(localChats));
         } else {
           localStorage.removeItem('chats');
         }
@@ -294,9 +295,9 @@ export function clearUserChatsFromLocalStorage(): void {
 export function cleanupUserDataOnLogout(): void {
   try {
     // 1. Reset user preferences to defaults
-    localStorage.setItem('currentSystemPrompt', DEFAULT_SYSTEM_PROMPT);
-    localStorage.setItem('currentTemperature', '0.7');
-    localStorage.setItem('currentTopP', '0.95');
+    safeSetItem('currentSystemPrompt', DEFAULT_SYSTEM_PROMPT);
+    safeSetItem('currentTemperature', '0.7');
+    safeSetItem('currentTopP', '0.95');
     localStorage.removeItem('selectedModel');
     localStorage.removeItem('selectedChat');
 
@@ -311,7 +312,7 @@ export function cleanupUserDataOnLogout(): void {
         );
         
         if (localPrompts.length > 0) {
-          localStorage.setItem('savedSystemPrompts', JSON.stringify(localPrompts));
+          safeSetItem('savedSystemPrompts', JSON.stringify(localPrompts));
         } else {
           localStorage.removeItem('savedSystemPrompts');
         }
@@ -325,12 +326,12 @@ export function cleanupUserDataOnLogout(): void {
     if (chatsStr) {
       try {
         const chats = JSON.parse(chatsStr);
-        const localChats = chats.filter((chat: any) => 
+        const localChats = chats.filter((chat: any) =>
           chat.source !== 'database' && !chat.databaseId
         );
-        
+
         if (localChats.length > 0) {
-          localStorage.setItem('chats', JSON.stringify(localChats));
+          safeSetItem('chats', JSON.stringify(localChats));
         } else {
           localStorage.removeItem('chats');
         }
@@ -369,7 +370,7 @@ export function cleanupUserDataOnLogout(): void {
         );
         
         if (foldersToPreserve.length > 0) {
-          localStorage.setItem('folders', JSON.stringify(foldersToPreserve));
+          safeSetItem('folders', JSON.stringify(foldersToPreserve));
         } else {
           localStorage.removeItem('folders');
         }

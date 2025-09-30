@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useUser } from '@auth0/nextjs-auth0/client';
 import { Message } from 'ai';
+import { safeSetItem } from '@/lib/local-storage-manager';
 
 function generateUUID(): string {
   // Use crypto.randomUUID if available (modern browsers)
@@ -85,7 +86,7 @@ export function useChatHistory(refreshFolders?: () => void) {
         
         // Save migrated chats back to localStorage
         if (migratedChats.some((chat: any) => !chat.source)) {
-          localStorage.setItem('chats', JSON.stringify(migratedChats));
+          safeSetItem('chats', JSON.stringify(migratedChats));
         }
       } catch (error) {
         localStorage.removeItem('chats');
@@ -102,7 +103,7 @@ export function useChatHistory(refreshFolders?: () => void) {
         // If user is logged out, save only local chats
         const chatsToSave = user?.sub ? chats : chats.filter(chat => chat.source === 'local');
         
-        localStorage.setItem('chats', JSON.stringify(chatsToSave));
+        safeSetItem('chats', JSON.stringify(chatsToSave));
       } catch (error) {
       }
     }, 100);
@@ -244,10 +245,10 @@ export function useChatHistory(refreshFolders?: () => void) {
         const savedChats = localStorage.getItem('chats');
         if (savedChats) {
           const parsedChats = JSON.parse(savedChats);
-          const updatedChats = parsedChats.map((c: any) => 
+          const updatedChats = parsedChats.map((c: any) =>
             c.folderId === originalFolderId ? { ...c, folderId: newFolderId } : c
           );
-          localStorage.setItem('chats', JSON.stringify(updatedChats));
+          safeSetItem('chats', JSON.stringify(updatedChats));
         }
 
         // Update folders in localStorage to replace local ID with database ID
@@ -257,7 +258,7 @@ export function useChatHistory(refreshFolders?: () => void) {
           const updatedFolders = parsedFolders.map((f: any) => 
             f.id === originalFolderId ? { ...f, id: newFolderId } : f
           );
-          localStorage.setItem('folders', JSON.stringify(updatedFolders));
+          safeSetItem('folders', JSON.stringify(updatedFolders));
           
           // Refresh folder state to reflect the changes
           if (refreshFolders) {
@@ -715,7 +716,7 @@ export function useChatHistory(refreshFolders?: () => void) {
             const newFolders = importData.folders.filter(
               (folder: any) => !existingFolderIds.has(folder.id)
             );
-            localStorage.setItem('folders', JSON.stringify([...existingFolders, ...newFolders]));
+            safeSetItem('folders', JSON.stringify([...existingFolders, ...newFolders]));
           }
 
           // Import saved system prompts if present
@@ -728,7 +729,7 @@ export function useChatHistory(refreshFolders?: () => void) {
             const newPrompts = importData.prompts.filter(
               (prompt: any) => !existingPromptNames.has(prompt.name)
             );
-            localStorage.setItem('savedSystemPrompts', JSON.stringify([...existingPrompts, ...newPrompts]));
+            safeSetItem('savedSystemPrompts', JSON.stringify([...existingPrompts, ...newPrompts]));
           }
 
           // Merge imported chats with existing chats, avoiding duplicates
@@ -745,7 +746,7 @@ export function useChatHistory(refreshFolders?: () => void) {
             
             // Immediately save to localStorage to ensure persistence
             try {
-              localStorage.setItem('chats', JSON.stringify(updatedChats));
+              safeSetItem('chats', JSON.stringify(updatedChats));
             } catch (error) {
             }
             

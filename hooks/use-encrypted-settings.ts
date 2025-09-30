@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useUser } from '@auth0/nextjs-auth0/client';
 
 import { cleanupDuplicatePrompts } from '@/lib/data-sync';
+import { safeSetItem } from '@/lib/local-storage-manager';
 
 export interface SavedPrompt {
   id?: string;
@@ -232,7 +233,7 @@ export function useEncryptedSettings() {
           
           // Update localStorage with database prompts if needed
           if (localPrompts.length === 0 && databasePrompts.length > 0) {
-            localStorage.setItem('savedSystemPrompts', JSON.stringify(databasePrompts));
+            safeSetItem('savedSystemPrompts', JSON.stringify(databasePrompts));
           }
         } else {
           setSavedPrompts(databasePrompts);
@@ -319,7 +320,7 @@ export function useEncryptedSettings() {
         const filteredPrompts = currentPrompts.filter((p: any) => p.name !== name);
         // Add the new prompt
         filteredPrompts.push(newPrompt);
-        localStorage.setItem('savedSystemPrompts', JSON.stringify(filteredPrompts));
+        safeSetItem('savedSystemPrompts', JSON.stringify(filteredPrompts));
       }
 
       return newPrompt;
@@ -346,7 +347,7 @@ export function useEncryptedSettings() {
         const filteredPrompts = currentPrompts.filter((p: any) => p.name !== name);
         // Add the new prompt
         filteredPrompts.push(newPrompt);
-        localStorage.setItem('savedSystemPrompts', JSON.stringify(filteredPrompts));
+        safeSetItem('savedSystemPrompts', JSON.stringify(filteredPrompts));
       }
 
       // TODO: Show user error message
@@ -389,11 +390,11 @@ export function useEncryptedSettings() {
         if (savedPromptsStr) {
           const currentPrompts = JSON.parse(savedPromptsStr);
           const updatedPrompts = currentPrompts.map((p: any) => 
-            p.id === promptId 
+            p.id === promptId
               ? { ...p, ...updates, synced: true }
               : p
           );
-          localStorage.setItem('savedSystemPrompts', JSON.stringify(updatedPrompts));
+          safeSetItem('savedSystemPrompts', JSON.stringify(updatedPrompts));
         }
       }
 
@@ -414,11 +415,11 @@ export function useEncryptedSettings() {
         if (savedPromptsStr) {
           const currentPrompts = JSON.parse(savedPromptsStr);
           const updatedPrompts = currentPrompts.map((p: any) => 
-            p.id === promptId 
+            p.id === promptId
               ? { ...p, ...updates, synced: false }
               : p
           );
-          localStorage.setItem('savedSystemPrompts', JSON.stringify(updatedPrompts));
+          safeSetItem('savedSystemPrompts', JSON.stringify(updatedPrompts));
         }
       }
 
@@ -458,7 +459,7 @@ export function useEncryptedSettings() {
         if (savedPromptsStr) {
           const localPrompts = JSON.parse(savedPromptsStr);
           const filteredPrompts = localPrompts.filter((p: any) => p.id !== promptId);
-          localStorage.setItem('savedSystemPrompts', JSON.stringify(filteredPrompts));
+          safeSetItem('savedSystemPrompts', JSON.stringify(filteredPrompts));
         }
       }
 

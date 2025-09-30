@@ -1,13 +1,14 @@
-import { 
-  getUserPreferences, 
-  upsertUserPreferences, 
-  getUserSavedPrompts, 
-  createSavedPrompt, 
-  updateSavedPrompt, 
+import {
+  getUserPreferences,
+  upsertUserPreferences,
+  getUserSavedPrompts,
+  createSavedPrompt,
+  updateSavedPrompt,
   deleteSavedPrompt,
   reorderSavedPrompts
 } from './database';
 import { createEncryptionService } from './services/encryption-service';
+import { safeSetItem } from '@/lib/local-storage-manager';
 
 export interface DecryptedUserPreferences {
   selected_model?: string;
@@ -317,19 +318,19 @@ export async function syncUserSettingsFromDatabase(userId: string): Promise<void
     const preferences = await getDecryptedUserPreferences(userId);
     if (preferences) {
       if (preferences.selected_model) {
-        localStorage.setItem('selectedModel', preferences.selected_model);
+        safeSetItem('selectedModel', preferences.selected_model);
       }
       if (preferences.system_prompt) {
-        localStorage.setItem('currentSystemPrompt', preferences.system_prompt);
+        safeSetItem('currentSystemPrompt', preferences.system_prompt);
       }
       if (preferences.temperature !== undefined) {
-        localStorage.setItem('currentTemperature', preferences.temperature.toString());
+        safeSetItem('currentTemperature', preferences.temperature.toString());
       }
       if (preferences.top_p !== undefined) {
-        localStorage.setItem('currentTopP', preferences.top_p.toString());
+        safeSetItem('currentTopP', preferences.top_p.toString());
       }
       if (preferences.last_selected_chat_id) {
-        localStorage.setItem('selectedChat', preferences.last_selected_chat_id);
+        safeSetItem('selectedChat', preferences.last_selected_chat_id);
       }
     }
     
@@ -340,6 +341,6 @@ export async function syncUserSettingsFromDatabase(userId: string): Promise<void
         name: p.name,
         content: p.content
       }));
-      localStorage.setItem('savedSystemPrompts', JSON.stringify(promptsForLocalStorage));
+      safeSetItem('savedSystemPrompts', JSON.stringify(promptsForLocalStorage));
     }
 }

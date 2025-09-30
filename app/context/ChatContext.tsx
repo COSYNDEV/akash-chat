@@ -15,7 +15,7 @@ import { useDatabaseSync } from '@/hooks/use-database-sync';
 import { useEncryptedSettings, UserPreferences } from '@/hooks/use-encrypted-settings';
 import { Folder, useFolders } from '@/hooks/use-folders';
 import { useRateLimit } from '@/hooks/use-rate-limit';
-import { checkAndCleanupLocalStorage } from '@/lib/local-storage-manager';
+import { safeSetItem } from '@/lib/local-storage-manager';
 import { getAccessToken, storeAccessToken, processMessages } from '@/lib/utils';
 
 const SELECTED_MODEL_KEY = 'selectedModel';
@@ -384,7 +384,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Save model selection
   useEffect(() => {
     if (typeof window !== 'undefined' && modelSelection) {
-      localStorage.setItem(SELECTED_MODEL_KEY, modelSelection);
+      safeSetItem(SELECTED_MODEL_KEY, modelSelection);
     }
   }, [modelSelection]);
 
@@ -450,21 +450,21 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Save system prompt to localStorage (for backward compatibility)
   useEffect(() => {
     if (typeof window !== 'undefined' && systemPrompt !== undefined) {
-      localStorage.setItem(CURRENT_SYSTEM_PROMPT_KEY, systemPrompt);
+      safeSetItem(CURRENT_SYSTEM_PROMPT_KEY, systemPrompt);
     }
   }, [systemPrompt]);
 
   // Save temperature to localStorage
   useEffect(() => {
     if (typeof window !== 'undefined' && temperature !== undefined) {
-      localStorage.setItem(CURRENT_TEMPERATURE_KEY, temperature.toString());
+      safeSetItem(CURRENT_TEMPERATURE_KEY, temperature.toString());
     }
   }, [temperature]);
 
   // Save top-p to localStorage
   useEffect(() => {
     if (typeof window !== 'undefined' && topP !== undefined) {
-      localStorage.setItem(CURRENT_TOP_P_KEY, topP.toString());
+      safeSetItem(CURRENT_TOP_P_KEY, topP.toString());
     }
   }, [topP]);
 
@@ -478,7 +478,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Remove from localStorage when leaving the page
           const privateChats = JSON.parse(localStorage.getItem('privateChats') || '{}');
           delete privateChats[currentChat.id];
-          localStorage.setItem('privateChats', JSON.stringify(privateChats));
+          safeSetItem('privateChats', JSON.stringify(privateChats));
         }
       }
       // Only clean up private chats in localStorage if private mode is enabled
@@ -499,7 +499,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Remove from localStorage when component unmounts
           const privateChats = JSON.parse(localStorage.getItem('privateChats') || '{}');
           delete privateChats[currentChat.id];
-          localStorage.setItem('privateChats', JSON.stringify(privateChats));
+          safeSetItem('privateChats', JSON.stringify(privateChats));
         }
       }
       // Only clean up private chats in localStorage on unmount if private mode is enabled
@@ -555,7 +555,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSessionInitialized(true);
 
         // Check and cleanup local storage if needed
-        checkAndCleanupLocalStorage();
+        // Storage cleanup is now handled by safeSetItem when errors occur
       } catch (error) {
         setSessionError('Unable to establish a secure session. Please try refreshing the page.');
       }

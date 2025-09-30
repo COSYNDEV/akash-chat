@@ -7,6 +7,7 @@ import { ThemeProvider } from 'next-themes';
 import { ConditionalAnalytics } from '@/components/analytics';
 import { CookieBanner } from '@/components/cookie-banner';
 import { ThemeScript } from '@/components/theme-script';
+import { StorageErrorToast } from '@/components/ui/storage-error-toast';
 
 import { ChatProvider } from './context/ChatContext';
 
@@ -131,6 +132,7 @@ export default function RootLayout({
               
               {children}
               <CookieBanner />
+              <StorageErrorToast />
             </ChatProvider>
           </UserProvider>
           <ConditionalAnalytics />

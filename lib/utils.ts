@@ -1,6 +1,7 @@
 import type { Message as AIMessage } from 'ai';
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { safeSetItem } from '@/lib/local-storage-manager';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -52,7 +53,7 @@ export const storeAccessToken = async (token: string): Promise<void> => {
     const hashedToken = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     
     // Store the hashed token
-    localStorage.setItem('akt_priv_access', hashedToken);
+    safeSetItem('akt_priv_access', hashedToken);
   } catch (error) {
     console.error('Error storing hashed token:', error);
   }

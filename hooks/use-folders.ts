@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useUser } from '@auth0/nextjs-auth0/client';
+import { safeSetItem } from '@/lib/local-storage-manager';
 
 export interface Folder {
   id: string;
@@ -58,7 +59,7 @@ export function useFolders(
         
         // Save migrated folders back to localStorage
         if (migratedFolders.some((folder: any) => !folder.source)) {
-          localStorage.setItem('folders', JSON.stringify(migratedFolders));
+          safeSetItem('folders', JSON.stringify(migratedFolders));
         }
       } catch (error) {
         console.error('Failed to parse saved folders:', error);
@@ -76,7 +77,7 @@ export function useFolders(
         // If user is logged out, save only local folders
         const foldersToSave = user?.sub ? folders : folders.filter(folder => folder.source === 'local');
         
-        localStorage.setItem('folders', JSON.stringify(foldersToSave));
+        safeSetItem('folders', JSON.stringify(foldersToSave));
       } catch (error) {
         console.error('Failed to save folders to localStorage:', error);
       }
@@ -220,7 +221,7 @@ export function useFolders(
                   } 
                 : folder
             );
-            localStorage.setItem('folders', JSON.stringify(updatedFolders));
+            safeSetItem('folders', JSON.stringify(updatedFolders));
           }
           
           return dbFolder.id;
@@ -301,7 +302,7 @@ export function useFolders(
             const updatedChats = parsedChats.map((c: any) => 
               c.folderId === originalFolderId ? { ...c, folderId: newFolderId } : c
             );
-            localStorage.setItem('chats', JSON.stringify(updatedChats));
+            safeSetItem('chats', JSON.stringify(updatedChats));
           } catch (error) {
             console.error('Failed to update chat folder references:', error);
           }
