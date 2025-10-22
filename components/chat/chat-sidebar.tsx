@@ -706,13 +706,13 @@ export function ChatSidebar({
                   />
                 </div>
 
-                <Link href="https://chatapi.akash.network" target="_blank" rel="noopener noreferrer">
+                <Link href="https://akashml.com" target="_blank" rel="noopener noreferrer">
                   <Button
                     variant="ghost"
                     className="w-full justify-start gap-2 h-8 px-2 text-sm font-light hover:bg-white dark:hover:bg-accent hover:text-accent-foreground"
                   >
                     <PlugZap className="w-3.5 h-3.5" />
-                    <span>AkashChat API</span>
+                    <span>API Access</span>
                   </Button>
                 </Link>
 

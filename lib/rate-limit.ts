@@ -1,4 +1,4 @@
-import { getUserTier, getModelByModelId } from './database';
+import { getUserTier, getModelByModelId, type UserTier } from './database';
 import redis from './redis';
 
 const MAX_TOKENS = parseInt(process.env.RATE_LIMIT_ANONYMOUS_TOKENS || '25000');
@@ -23,18 +23,18 @@ export interface RateLimit {
 export function formatTimeUntilReset(resetTime: Date): string {
   const now = new Date();
   const diff = resetTime.getTime() - now.getTime();
-  
+
   if (diff <= 0) {
     return 'now';
   }
-  
+
   const hours = Math.floor(diff / (1000 * 60 * 60));
   const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-  
+
   if (hours > 0) {
     return `${hours}h ${minutes}m`;
   }
-  
+
   return `${minutes}m`;
 }
 
@@ -42,6 +42,39 @@ export interface RateLimitConfig {
   maxTokens: number;
   windowMs: number;
   keyPrefix?: string;
+}
+
+// Cache for permissionless tier - initialized on first use
+let permissionlessTierCache: UserTier | null = null;
+let permissionlessTierCachePromise: Promise<UserTier | null> | null = null;
+
+/**
+ * Get cached permissionless tier from database
+ */
+async function getPermissionlessTier(): Promise<UserTier | null> {
+  if (permissionlessTierCache) {
+    return permissionlessTierCache;
+  }
+
+  // If already fetching, return the existing promise
+  if (permissionlessTierCachePromise) {
+    return permissionlessTierCachePromise;
+  }
+
+  // Start fetching and cache the promise
+  permissionlessTierCachePromise = getUserTier(null)
+    .then(tier => {
+      permissionlessTierCache = tier;
+      permissionlessTierCachePromise = null;
+      return tier;
+    })
+    .catch(error => {
+      console.error('Failed to cache permissionless tier:', error);
+      permissionlessTierCachePromise = null;
+      return null;
+    });
+
+  return permissionlessTierCachePromise;
 }
 
 export const DEFAULT_ANONYMOUS_LIMIT: RateLimitConfig = {
@@ -72,15 +105,34 @@ export function getRateLimitConfig(isAuthenticated: boolean): RateLimitConfig {
  */
 export async function getRateLimitConfigForUser(userId: string | null): Promise<RateLimitConfig> {
   if (!userId) {
+    // Use cached permissionless tier from database
+    const permissionlessTier = await getPermissionlessTier();
+    if (permissionlessTier) {
+      return {
+        maxTokens: permissionlessTier.token_limit,
+        windowMs: permissionlessTier.rate_limit_window_ms,
+        keyPrefix: 'token_limit:anonymous:',
+      };
+    }
+    // Fallback to env var if database fetch fails
     return DEFAULT_ANONYMOUS_LIMIT;
   }
-  
+
   try {
     const userTier = await getUserTier(userId);
     if (!userTier) {
+      // User has no tier, use permissionless tier
+      const permissionlessTier = await getPermissionlessTier();
+      if (permissionlessTier) {
+        return {
+          maxTokens: permissionlessTier.token_limit,
+          windowMs: permissionlessTier.rate_limit_window_ms,
+          keyPrefix: 'token_limit:user:',
+        };
+      }
       return DEFAULT_ANONYMOUS_LIMIT;
     }
-    
+
     return {
       maxTokens: userTier.token_limit,
       windowMs: userTier.rate_limit_window_ms,
@@ -88,6 +140,15 @@ export async function getRateLimitConfigForUser(userId: string | null): Promise<
     };
   } catch (error) {
     console.error('Error fetching user tier for rate limiting:', error);
+    // Try to use cached permissionless tier as fallback
+    const permissionlessTier = await getPermissionlessTier();
+    if (permissionlessTier) {
+      return {
+        maxTokens: permissionlessTier.token_limit,
+        windowMs: permissionlessTier.rate_limit_window_ms,
+        keyPrefix: 'token_limit:user:',
+      };
+    }
     return DEFAULT_ANONYMOUS_LIMIT;
   }
 }

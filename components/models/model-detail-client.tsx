@@ -230,6 +230,18 @@ export function ModelDetailClient({ modelId, model: serverModel, modelWithAccess
                   </Button>
                 )}
                 
+                {/* API Access button */}
+                <Button
+                  asChild
+                  className="w-full text-md flex items-center justify-center gap-2 py-6 hover:bg-border"
+                  variant="outline"
+                >
+                  <Link href="https://akashml.com" target="_blank" rel="noopener noreferrer" aria-label="API Access">
+                    API Access
+                    <ArrowRight className="h-5 w-5 ml-1" />
+                  </Link>
+                </Button>
+                
                 {/* Status messages based on access control */}
                 {modelWithAccess?.action_button === 'start_chat' && modelWithAccess?.action_text === 'Unavailable' && (
                   <p className="text-sm text-muted-foreground mt-2 text-center">
