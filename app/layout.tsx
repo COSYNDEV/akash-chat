@@ -64,7 +64,7 @@ export const metadata = {
     card: 'summary_large_image',
     title: 'AkashChat',
     description: 'Chat with the leading open source AI models, powered by the Akash Supercloud.',
-    creator: '@akashnet_',
+    creator: '@akashnet',
     images: ['/og-image.png']
   },
   appleWebApp: {

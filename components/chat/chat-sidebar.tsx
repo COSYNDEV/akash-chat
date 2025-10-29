@@ -757,7 +757,7 @@ export function ChatSidebar({
                             <span>Akash Github</span>
                           </Button>
                         </Link>
-                        <Link href="https://twitter.com/akashnet_" target="_blank" rel="noopener noreferrer">
+                        <Link href="https://twitter.com/akashnet" target="_blank" rel="noopener noreferrer">
                           <Button
                             variant="ghost"
                             className="w-full justify-start gap-2 h-8 px-2 text-sm font-light hover:bg-accent hover:text-accent-foreground"
