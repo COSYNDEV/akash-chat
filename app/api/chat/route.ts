@@ -371,7 +371,7 @@ async function handlePostRequest(req: NextRequest) {
       const apiModelId = configToApiIdMap.get(model || defaultModel) || model || defaultModel;
       
       const result = streamText({
-        model: openai(apiModelId),
+        model: openaiClient(apiModelId),
         messages: messagesToSend,
         system: system || DEFAULT_SYSTEM_PROMPT,
         temperature: temperature || selectedModel?.temperature,

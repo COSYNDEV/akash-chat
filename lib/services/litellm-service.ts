@@ -22,6 +22,21 @@ export class LiteLLMService {
   private static jwtTokenCache: JWTTokenCache | null = null;
 
   /**
+   * Decode JWT to get expiration time (without verification)
+   */
+  private static getJWTExpiration(token: string): number | null {
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) {return null;}
+
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+      return payload.exp ? payload.exp * 1000 : null; // Convert to milliseconds
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /**
    * Get a valid JWT token, refreshing if necessary
    */
   private static async getValidJWT(): Promise<string> {
@@ -35,7 +50,7 @@ export class LiteLLMService {
       const cachedData = await redis.get(this.JWT_REDIS_KEY);
       if (cachedData) {
         const cached = JSON.parse(cachedData) as JWTTokenCache;
-        // Refresh if less than 5 minutes remaining
+        // Use cached token if more than 5 minutes remaining
         if (Date.now() < cached.expiresAt - 5 * 60 * 1000) {
           this.jwtTokenCache = cached;
           return cached.token;
@@ -45,7 +60,30 @@ export class LiteLLMService {
       console.error('Failed to get JWT from Redis:', error);
     }
 
-    // Need to refresh the token
+    // Check if static token from env is still valid
+    const staticToken = process.env.JWT_API_KEY;
+    if (staticToken) {
+      const expiration = this.getJWTExpiration(staticToken);
+      if (expiration && Date.now() < expiration - 5 * 60 * 1000) {
+        // Static token is still valid, cache it
+        const tokenCache: JWTTokenCache = {
+          token: staticToken,
+          expiresAt: expiration
+        };
+        this.jwtTokenCache = tokenCache;
+
+        try {
+          const ttlSeconds = Math.floor((expiration - Date.now()) / 1000);
+          await redis.set(this.JWT_REDIS_KEY, JSON.stringify(tokenCache), 'EX', ttlSeconds);
+        } catch (error) {
+          console.error('Failed to cache static JWT in Redis:', error);
+        }
+
+        return staticToken;
+      }
+    }
+
+    // Token expired or not found, refresh it
     return await this.refreshJWT();
   }
 
