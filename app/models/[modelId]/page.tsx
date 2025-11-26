@@ -88,12 +88,12 @@ export async function generateStaticParams() {
   try {
     const { models: allModels } = await fetchAllModels();
     return allModels.map((model: any) => ({
-      modelId: model.model_id,
+      modelId: encodeURIComponent(model.model_id),
     }));
   } catch (error) {
     console.warn('[MODELS] Using static config for generateStaticParams:', error);
     return models.map(model => ({
-      modelId: model.id,
+      modelId: encodeURIComponent(model.id),
     }));
   }
 }
@@ -101,8 +101,9 @@ export async function generateStaticParams() {
 export async function generateMetadata(props: {
   params: Promise<{ modelId: string }>
 }): Promise<Metadata> {
-  const { modelId } = await props.params;
-  
+  const { modelId: encodedModelId } = await props.params;
+  const modelId = decodeURIComponent(encodedModelId);
+
   // Try to get model from API first, then fallback to static config
   let model: any = null;
   try {
@@ -111,7 +112,7 @@ export async function generateMetadata(props: {
   } catch (error) {
     console.warn('[MODELS] Using static config for metadata:', error);
   }
-  
+
   // Fallback to static config if not found in API
   if (!model) {
     const staticModel = models.find(m => m.id.toLowerCase() === modelId.toLowerCase());
@@ -138,7 +139,7 @@ export async function generateMetadata(props: {
     openGraph: {
       title: `${model.name} - AI Model | AkashChat`,
       description: model.about_content || model.description || `Learn about and chat with ${model.name}, an advanced AI model powered by the Akash Supercloud.`,
-      url: `https://chat.akash.network/models/${modelId}/`,
+      url: `https://chat.akash.network/models/${encodeURIComponent(modelId)}/`,
       type: 'website',
       images: [
         {
@@ -156,7 +157,7 @@ export async function generateMetadata(props: {
       images: ['/og-image.png']
     },
     alternates: {
-      canonical: `/models/${modelId}/`,
+      canonical: `/models/${encodeURIComponent(modelId)}/`,
     },
     keywords: ['AI model', model.name, 'language model', 'Akash Network', 'LLM', 'machine learning', 'chat model', 'AI conversation', 'free AI', 'free chat AI', 'free AI model', 'decentralized AI', model.hf_repo || '', model.architecture || '', (model.parameters || '') + ' parameters', (model.token_limit || model.tokenLimit)?.toString() + ' context length' || ''],
   };
@@ -165,12 +166,13 @@ export async function generateMetadata(props: {
 export default async function ModelIntroPage(props: {
   params: Promise<{ modelId: string }>
 }) {
-  const { modelId } = await props.params;
-  
+  const { modelId: encodedModelId } = await props.params;
+  const modelId = decodeURIComponent(encodedModelId);
+
   // Get model data with access control and availability info
   let modelWithAccess: any = null;
   let userTier = 'permissionless';
-  
+
   try {
     const { models: allModels, user_tier } = await fetchAllModels();
     modelWithAccess = allModels.find((m: any) => m.model_id.toLowerCase() === modelId.toLowerCase());
@@ -178,7 +180,7 @@ export default async function ModelIntroPage(props: {
   } catch (error) {
     console.warn('[MODELS DETAIL] API error, using static fallback:', error);
   }
-  
+
   // Fallback to static config if not found in API
   if (!modelWithAccess) {
     const staticModel = models.find(m => m.id.toLowerCase() === modelId.toLowerCase());
@@ -248,7 +250,7 @@ export default async function ModelIntroPage(props: {
         <meta itemProp="description" content="A platform for chatting with various AI language models" />
         <meta itemProp="applicationCategory" content="ChatApplication" />
         <meta itemProp="operatingSystem" content="Any" />
-        <meta itemProp="url" content={`https://chat.akash.network/models/${modelId}/`} />
+        <meta itemProp="url" content={`https://chat.akash.network/models/${encodeURIComponent(modelId)}/`} />
         
         {/* Chat Service Properties */}
         <div itemProp="offers" itemScope itemType="https://schema.org/Service">

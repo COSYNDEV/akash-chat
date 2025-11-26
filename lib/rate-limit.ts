@@ -349,9 +349,6 @@ export function getClientIP(request: Request): string {
   // Only use the reliable X-Original-Chat-Forwarded-For header set by Caddy
   const originalChatForwarded = request.headers.get('X-Original-Chat-Forwarded-For');
   const cloudflareForwarded = request.headers.get('CF-Connecting-IP');
-
-  console.log('originalChatForwarded', originalChatForwarded);
-  console.log('cloudflareForwarded', cloudflareForwarded);
   
   if (originalChatForwarded) {
     const ip = originalChatForwarded.split(',')[0].trim();

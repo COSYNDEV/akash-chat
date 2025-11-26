@@ -556,6 +556,37 @@ export async function getUserApiKey(userId: string): Promise<UserApiKey | null> 
   return data;
 }
 
+export async function updateUserApiKey(
+  userId: string,
+  encryptedData: {
+    litellm_api_key_encrypted_b64: string;
+    litellm_api_key_iv_b64: string;
+    litellm_api_key_tag_b64: string;
+  }
+): Promise<UserApiKey> {
+  const query = `
+    UPDATE user_api_keys
+    SET litellm_api_key_encrypted_b64 = $2,
+        litellm_api_key_iv_b64 = $3,
+        litellm_api_key_tag_b64 = $4,
+        updated_at = NOW()
+    WHERE user_id = $1 AND is_active = true
+    RETURNING *
+  `;
+
+  const data = await executeQuerySingle<UserApiKey>(query, [
+    userId,
+    encryptedData.litellm_api_key_encrypted_b64,
+    encryptedData.litellm_api_key_iv_b64,
+    encryptedData.litellm_api_key_tag_b64
+  ]);
+
+  if (!data) {
+    throw new Error('Failed to update user API key');
+  }
+  return data;
+}
+
 // Batch Deletion Operations
 export async function deleteAllUserChatHistory(userId: string) {  
   // Use database cascading delete - messages will be deleted automatically

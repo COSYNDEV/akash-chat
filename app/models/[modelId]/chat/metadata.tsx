@@ -5,7 +5,8 @@ import { models } from '@/app/config/models';
 export async function generateMetadata(props: {
   params: Promise<{ modelId: string }>
 }): Promise<Metadata> {
-  const { modelId } = await props.params;
+  const { modelId: encodedModelId } = await props.params;
+  const modelId = decodeURIComponent(encodedModelId);
   const model = models.find(m => m.id.toLowerCase() === modelId.toLowerCase());
   
   if (!model) {
@@ -21,7 +22,7 @@ export async function generateMetadata(props: {
     openGraph: {
       title: `Chat with ${model.name} - AkashChat`,
       description: model.aboutContent || model.description || `Chat with ${model.name}, an advanced AI model powered by the Akash Supercloud.`,
-      url: `https://chat.akash.network/models/${modelId}/chat`,
+      url: `https://chat.akash.network/models/${encodeURIComponent(modelId)}/chat`,
       type: 'website',
       images: [
         {
@@ -39,7 +40,7 @@ export async function generateMetadata(props: {
       images: ['/og-image.png']
     },
     alternates: {
-      canonical: `/models/${modelId}/chat`,
+      canonical: `/models/${encodeURIComponent(modelId)}/chat`,
     },
     keywords: ['AI chat', model.name, 'language model', 'Akash Network', 'LLM', 'machine learning', 'chat model', 'AI conversation', model.hf_repo || '', model.architecture || '', model.parameters + ' parameters', model.tokenLimit?.toString() + ' context length' || ''],
   };

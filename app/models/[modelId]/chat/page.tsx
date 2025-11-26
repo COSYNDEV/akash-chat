@@ -11,9 +11,10 @@ import { ModelConfig } from '@/components/model-config';
 import { Button } from "@/components/ui/button";
 
 export default function ModelDetailPage( {params}: any) {
-  
+
   const promiseParams: any = use(params);
-  const modelId = promiseParams?.modelId || '';
+  const encodedModelId = promiseParams?.modelId || '';
+  const modelId = decodeURIComponent(encodedModelId);
   const router = useRouter();
   
   const {
@@ -157,7 +158,7 @@ export default function ModelDetailPage( {params}: any) {
                 <meta itemProp="description" content="A platform for chatting with various AI language models" />
                 <meta itemProp="applicationCategory" content="ChatApplication" />
                 <meta itemProp="operatingSystem" content="Any" />
-                <meta itemProp="url" content={`https://chat.akash.network/models/${modelId}/chat`} />
+                <meta itemProp="url" content={`https://chat.akash.network/models/${encodeURIComponent(modelId)}/chat`} />
                 
                 {/* Chat Service Properties */}
                 <div itemProp="offers" itemScope itemType="https://schema.org/Service">

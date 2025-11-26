@@ -177,7 +177,7 @@ export function ChatSidebar({
         router.push('/');
       } else if (isChatPage && chat.model && chat.model.id) {
         // If on chat page and the chat has a model, update the URL to reflect the model
-        router.push(`/models/${chat.model.id}/chat/`);
+        router.push(`/models/${encodeURIComponent(chat.model.id)}/chat/`);
       }
 
       if (isMobile) {

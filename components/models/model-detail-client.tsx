@@ -155,8 +155,8 @@ export function ModelDetailClient({ modelId, model: serverModel, modelWithAccess
                       (!model.available || modelWithAccess?.action_text === 'Unavailable') && "opacity-50"
                     )}
                   >
-                    <Link 
-                      href={modelWithAccess?.action_text === 'Unavailable' ? '#' : `/models/${model.id}/chat`}
+                    <Link
+                      href={modelWithAccess?.action_text === 'Unavailable' ? '#' : `/models/${encodeURIComponent(model.id)}/chat`}
                       onClick={model.available && modelWithAccess?.action_text !== 'Unavailable' ? () => {
                         setModelSelection(model.id);
                         handleNewChat();
@@ -202,8 +202,8 @@ export function ModelDetailClient({ modelId, model: serverModel, modelWithAccess
                       !model.available && "opacity-50"
                     )}
                   >
-                    <Link 
-                      href={`/models/${model.id}/chat`}
+                    <Link
+                      href={`/models/${encodeURIComponent(model.id)}/chat`}
                       onClick={model.available ? () => {
                         setModelSelection(model.id);
                         handleNewChat();

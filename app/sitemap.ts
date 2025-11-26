@@ -36,7 +36,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   // Add routes for all models with enhanced priorities for available and default models
   const modelRoutes = models.map(model => ({
-    url: `${baseUrl}/models/${model.id}/`,
+    url: `${baseUrl}/models/${encodeURIComponent(model.id)}/`,
     lastModified: currentDate,
     changeFrequency: 'weekly',
     // Assign higher priority to available models and default model

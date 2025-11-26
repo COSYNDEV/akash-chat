@@ -38,7 +38,7 @@ export function ModelsPageClient({ models }: ModelsPageClientProps) {
                     {models.map((model: Model) => (
                         <Link
                             key={model.id}
-                            href={`/models/${model.id}`}
+                            href={`/models/${encodeURIComponent(model.id)}`}
                             onClick={() => handleModelClick(model)}
                             className={cn(
                                 "group/card rounded-lg border cursor-pointer bg-background text-foreground",
