@@ -10,7 +10,8 @@ const TAG_LENGTH = 16;
 
 // Derive encryption key from master key and user-specific salt
 function deriveKey(masterKey: string, salt: Buffer): Buffer {
-  return crypto.pbkdf2Sync(masterKey, salt as any, 100000, 32, 'sha512');
+  const key = crypto.pbkdf2Sync(masterKey, salt as any, 100000, 32, 'sha512');
+  return key;
 }
 
 export interface EncryptedData {
@@ -71,7 +72,7 @@ export function generateUserMasterKey(userId: string): string {
   if (!appSecret) {
     throw new Error('ENCRYPTION_SECRET environment variable is required');
   }
-  
+
   // Create deterministic but secure key for user
   return crypto
     .createHmac('sha256', appSecret)

@@ -57,14 +57,14 @@ export function useDatabaseSync(options: UseDatabaseSyncOptions = {}): UseDataba
       setProgress({ stage: 'loading', message: 'Loading your data...', percentage: 25 });
 
       const data = await loadUserDataFromDatabase(user.sub);
-      
+
       setUserData(data);
       setHasData(true);
       setProgress({ stage: 'merging', message: 'Merging your data...', percentage: 50 });
-      
+
       // Apply preferences to localStorage (but not chats/folders - handled separately)
       applyDataToLocalStorage(data);
-      
+
       // Merge database folders with local folders using the provided function
       if (data.folders && data.folders.length > 0 && mergeDatabaseFolders) {
         try {
@@ -73,15 +73,15 @@ export function useDatabaseSync(options: UseDatabaseSyncOptions = {}): UseDataba
           console.error('🔄 DATABASE SYNC: Error calling mergeDatabaseFolders:', error);
         }
       }
-      
+
       // Refresh folders after merging
       if (refreshFolders) {
         refreshFolders();
       }
-      
+
       // Merge database chats with local chats using the provided function
       if (data.chatSessions && data.chatSessions.length > 0 && mergeDatabaseChats) {
-        
+
         try {
           mergeDatabaseChats(data.chatSessions);
         } catch (error) {
@@ -89,12 +89,12 @@ export function useDatabaseSync(options: UseDatabaseSyncOptions = {}): UseDataba
         }
       } else {
       }
-      
+
       setSyncStatus('complete');
       setProgress({ stage: 'complete', message: 'All done!', percentage: 100 });
-      
+
     } catch (error) {
-      // console.error('Failed to load database data:', error);
+      console.error('Failed to load user data:', error);
       setError(error instanceof Error ? error.message : 'Failed to load data');
       setSyncStatus('error');
       setHasData(false);
@@ -111,21 +111,17 @@ export function useDatabaseSync(options: UseDatabaseSyncOptions = {}): UseDataba
     try {
       setSyncStatus('checking');
       setProgress({ stage: 'checking', message: 'Checking for existing data...', percentage: 10 });
-      
+
       // Check if user has database data
       const hasDbData = await hasDataInDatabase();
-      
+
       // Check if user has local data to sync
       const hasLocalData = hasLocalDataToSync();
-      
+
       if (hasDbData) {
         // User has database data - load it directly (lazy migration handles any new local data)
         setProgress({ stage: 'loading', message: 'Loading your existing data...', percentage: 25 });
         await loadData();
-        
-        if (hasLocalData) {
-        }
-        
         return;
       }
 
@@ -137,9 +133,9 @@ export function useDatabaseSync(options: UseDatabaseSyncOptions = {}): UseDataba
         setSyncStatus('complete');
         setProgress({ stage: 'complete', message: 'Ready to start!', percentage: 100 });
       }
-      
+
     } catch (error) {
-      // console.error('❌ [DB-SYNC] Auto-sync failed:', error);
+      console.error('Auto-sync failed:', error);
       setError(error instanceof Error ? error.message : 'Auto-sync failed');
       setSyncStatus('error');
     }

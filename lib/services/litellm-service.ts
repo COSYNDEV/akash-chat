@@ -93,9 +93,10 @@ export class LiteLLMService {
   private static async refreshJWT(): Promise<string> {
     const refreshToken = process.env.JWT_REFRESH_TOKEN;
     const clientId = process.env.AUTH0_CLIENT_ID;
+    const clientSecret = process.env.AUTH0_CLIENT_SECRET;
     const issuerBaseUrl = process.env.AUTH0_ISSUER_BASE_URL;
 
-    if (!refreshToken || !clientId || !issuerBaseUrl) {
+    if (!refreshToken || !clientId || !clientSecret || !issuerBaseUrl) {
       // Fallback to static token if refresh not configured
       console.warn('JWT refresh not configured, using static token');
       return process.env.JWT_API_KEY || '';
@@ -110,8 +111,9 @@ export class LiteLLMService {
         body: JSON.stringify({
           grant_type: 'refresh_token',
           client_id: clientId,
+          client_secret: clientSecret,
           refresh_token: refreshToken
-        })
+          })
       });
 
       if (!response.ok) {

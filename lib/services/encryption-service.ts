@@ -1,4 +1,4 @@
-import { decryptText, generateUserMasterKey, type EncryptedData } from '../encryption';
+import { generateUserMasterKey, type EncryptedData } from '../encryption';
 
 export interface DatabaseEncryptedData {
   content_encrypted: string;
@@ -17,9 +17,34 @@ export interface ClientEncryptedData {
  */
 export class EncryptionService {
   private masterKey: string;
+  private pbkdf2CallCount = 0;
+  private derivedKeyCache: Map<string, Buffer>;
 
   constructor(userId: string) {
     this.masterKey = generateUserMasterKey(userId);
+    this.derivedKeyCache = new Map();
+  }
+
+  /**
+   * Get or derive encryption key with caching
+   */
+  private getDerivedKey(salt: Buffer): Buffer {
+    const saltKey = salt.toString('base64');
+
+    // Check cache first
+    if (this.derivedKeyCache.has(saltKey)) {
+      return this.derivedKeyCache.get(saltKey)!;
+    }
+
+    // Cache miss - derive the key
+    const crypto = require('crypto');
+    const key = crypto.pbkdf2Sync(this.masterKey, salt, 100000, 32, 'sha512');
+    this.pbkdf2CallCount++;
+
+    // Cache the derived key
+    this.derivedKeyCache.set(saltKey, key);
+
+    return key;
   }
 
   /**
@@ -55,20 +80,20 @@ export class EncryptionService {
 
     // Generate random IV (still random for security)
     const iv = crypto.randomBytes(IV_LENGTH);
-    
-    // Use provided salt
-    const key = crypto.pbkdf2Sync(masterKey, salt, 100000, 32, 'sha512');
-    
+
+    // Use cached key derivation
+    const key = this.getDerivedKey(salt);
+
     // Create cipher using CBC mode
     const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
-    
+
     // Encrypt the text
     let encrypted = cipher.update(text, 'utf8');
     encrypted = Buffer.concat([encrypted, cipher.final()]);
-    
+
     // For CBC mode, use a hash of the encrypted data as integrity check
     const tag = crypto.createHash('sha256').update(encrypted).digest().slice(0, TAG_LENGTH);
-    
+
     return {
       encrypted,
       iv,
@@ -88,22 +113,35 @@ export class EncryptionService {
     const encryptedBuffer = Buffer.from(data.content_encrypted, 'base64');
     const ivBuffer = Buffer.from(data.content_iv, 'base64');
     const tagBuffer = Buffer.from(data.content_tag, 'base64');
-    
+
     // Use deterministic salt derived from user ID for new format
     const deterministicSalt = Buffer.from(this.masterKey.substring(0, 32).padEnd(32, '0'), 'utf8');
-    
-    const encryptedData: EncryptedData = {
-      encrypted: encryptedBuffer,
-      iv: ivBuffer,
-      tag: tagBuffer,
-      salt: deterministicSalt
-    };
 
     try {
-      const decrypted = decryptText(encryptedData, this.masterKey);
-      
+      const crypto = require('crypto');
+      const ALGORITHM = 'aes-256-cbc';
+      const TAG_LENGTH = 16;
+
+      // Use cached key derivation instead of calling decryptText
+      const key = this.getDerivedKey(deterministicSalt);
+
+      // Create decipher for CBC mode
+      const decipher = crypto.createDecipheriv(ALGORITHM, key, ivBuffer);
+
+      // Decrypt the data
+      const decryptedPart1 = decipher.update(encryptedBuffer);
+      const decryptedPart2 = decipher.final();
+      const decrypted = Buffer.concat([decryptedPart1, decryptedPart2]);
+      const decryptedText = decrypted.toString('utf8');
+
+      // Verify integrity using the tag (basic check for CBC mode)
+      const expectedTag = crypto.createHash('sha256').update(encryptedBuffer).digest().slice(0, TAG_LENGTH);
+      if (!tagBuffer.equals(expectedTag)) {
+        throw new Error('Data integrity check failed');
+      }
+
       // Convert placeholder back to empty string
-      return decrypted === '[EMPTY_MESSAGE]' ? '' : decrypted;
+      return decryptedText === '[EMPTY_MESSAGE]' ? '' : decryptedText;
     } catch (error) {
       console.error('Failed to decrypt data:', error);
       throw new Error('Decryption failed - data may be corrupted or encryption key changed');
@@ -131,7 +169,7 @@ export class EncryptionService {
    */
   async decryptBatchSafe(dataArray: DatabaseEncryptedData[]): Promise<Array<{success: boolean, content: string, error?: string}>> {
     const results: Array<{success: boolean, content: string, error?: string}> = [];
-    
+
     for (const data of dataArray) {
       try {
         const decrypted = await this.decryptFromDatabase(data);
@@ -147,7 +185,7 @@ export class EncryptionService {
         });
       }
     }
-    
+
     return results;
   }
 }

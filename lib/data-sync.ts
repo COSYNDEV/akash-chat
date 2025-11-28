@@ -36,44 +36,42 @@ export interface UserData {
  * Load user data from database via API routes with caching
  */
 export async function loadUserDataFromDatabase(userId: string): Promise<UserData> {
-    // Check cache first
     const cached = userDataCache.get(userId);
     const now = Date.now();
-    
     if (cached && (now - cached.timestamp) < cached.ttl) {
-      return cached.data;
+     return cached.data;
     }
-    
+
     // Use the new optimized unified API endpoint
     const response = await fetch('/api/user/data');
-    
+
     if (!response.ok) {
       throw new Error(`Failed to load user data: ${response.statusText}`);
     }
-    
+
     const responseData = await response.json();
+
     const { data } = responseData;
-    
+
     if (!data) {
       throw new Error('Invalid response format: missing data field');
     }
-    
+
     const { preferences, chatSessions, folders, savedPrompts } = data;
-    
+
     const userData = {
       preferences: preferences || {},
       chatSessions: chatSessions || [],
       folders: folders || [],
       savedPrompts: savedPrompts || []
     };
-    
-    // Cache the result
+
     userDataCache.set(userId, {
       data: userData,
-      timestamp: now,
+      timestamp: Date.now(),
       ttl: CACHE_TTL
     });
-    
+
     return userData;
 
 }
@@ -207,23 +205,23 @@ export function hasLocalDataToSync(): boolean {
  */
 export async function hasDataInDatabase(): Promise<boolean> {
     const response = await fetch('/api/user/data');
-    
+
     if (!response.ok) {
       return false;
     }
-    
+
     const responseData = await response.json();
-    
+
     const { data } = responseData;
-    
+
     if (!data || !data.summary) {
       return false;
     }
-    
+
     const { summary } = data;
-    
+
     const hasData = !!(summary.hasPreferences || summary.chatCount > 0 || summary.folderCount > 0);
-    
+
     return hasData;
 }
 
