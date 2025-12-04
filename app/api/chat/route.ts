@@ -6,7 +6,7 @@ import cl100k_base from "tiktoken/encoders/cl100k_base.json";
 import { Tiktoken } from "tiktoken/lite";
 
 import { apiEndpoint, apiKey, imgGenFnModel, DEFAULT_SYSTEM_PROMPT } from '@/app/config/api';
-import { defaultModel, createConfigToApiIdMap } from '@/app/config/models';
+import { defaultModel } from '@/app/config/models';
 import { withSessionAuth } from '@/lib/auth';
 import { getAvailableModelsForUser } from '@/lib/models';
 import { checkTokenLimit, incrementTokenUsageWithMultiplier, getClientIP, getRateLimitConfigForUser, storeConversationTokens } from '@/lib/rate-limit';
@@ -366,10 +366,8 @@ async function handlePostRequest(req: NextRequest) {
 
   return createDataStreamResponse({
     execute: async dataStream => {
-      // Map config model ID to API model ID if needed
-      const configToApiIdMap = createConfigToApiIdMap();
-      const apiModelId = configToApiIdMap.get(model || defaultModel) || model || defaultModel;
-      
+      const apiModelId = dbModel.api_id || dbModel.model_id || defaultModel;
+
       const result = streamText({
         model: openaiClient(apiModelId),
         messages: messagesToSend,
