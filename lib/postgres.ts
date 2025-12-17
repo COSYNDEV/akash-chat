@@ -24,12 +24,11 @@ export function getPostgresPool(): Pool {
 
     _pool = new Pool({
       connectionString: databaseUrl,
-      // Connection pool settings optimized for Supabase
-      max: 10, // Maximum number of clients in pool (reduced for better resource management)
-      min: 2,  // Keep minimum connections alive
-      idleTimeoutMillis: 60000, // Close idle clients after 60 seconds
-      connectionTimeoutMillis: 10000, // Increased timeout to 10 seconds for Supabase
-      // SSL configuration for Supabase (always required)
+      max: 5, // Maximum number of clients in pool
+      min: 1,  // Keep minimum connections alive
+      idleTimeoutMillis: 30000, // Close idle clients after 30 seconds (faster cleanup)
+      connectionTimeoutMillis: 10000, // Increased timeout to 10 seconds
+      // SSL configuration (always required)
       ssl: { rejectUnauthorized: false },
       // Query timeout
       query_timeout: 30000,
@@ -107,7 +106,11 @@ export async function executeQuery<T = any>(
       }
 
       // Check if this is a connection error we should retry
+      const isMaxClientsError = error.message.includes('MaxClientsInSessionMode') || 
+                                 error.message.includes('max clients reached');
+      
       const shouldRetry = retryCount < maxRetries && (
+        isMaxClientsError ||
         error.message.includes('connection timeout') ||
         error.message.includes('Connection terminated') ||
         error.message.includes('ECONNRESET') ||
@@ -118,7 +121,10 @@ export async function executeQuery<T = any>(
 
       if (shouldRetry) {
         retryCount++;
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // For MaxClients errors, wait longer to allow connections to free up
+        const waitTime = isMaxClientsError ? 2000 : 1000;
+        console.log(`[DB] Connection pool exhausted, retrying in ${waitTime}ms (attempt ${retryCount}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
         continue;
       } else {
         console.error('[DB] Query failed:', error);
@@ -148,17 +154,55 @@ export async function withTransaction<T>(
   callback: (client: PoolClient) => Promise<T>
 ): Promise<T> {
   const pool = getPostgresPool();
-  const client = await pool.connect();
+  let client: PoolClient | undefined;
+  let retryCount = 0;
+  const maxRetries = 2;
   
-  try {
-    await client.query('BEGIN');
-    const result = await callback(client);
-    await client.query('COMMIT');
-    return result;
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
+  while (retryCount <= maxRetries) {
+    try {
+      client = await pool.connect();
+      await client.query('BEGIN');
+      const result = await callback(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error: any) {
+      // Rollback if transaction was started
+      if (client) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackError) {
+          // Ignore rollback errors
+        }
+      }
+
+      // Check if this is a connection error we should retry
+      const isMaxClientsError = error.message.includes('MaxClientsInSessionMode') || 
+                                 error.message.includes('max clients reached');
+      
+      const shouldRetry = retryCount < maxRetries && (
+        isMaxClientsError ||
+        error.message.includes('connection timeout') ||
+        error.message.includes('Connection terminated') ||
+        error.message.includes('ECONNRESET') ||
+        error.code === 'ECONNRESET'
+      );
+
+      if (shouldRetry) {
+        retryCount++;
+        const waitTime = isMaxClientsError ? 2000 : 1000;
+        console.log(`[DB] Transaction connection pool exhausted, retrying in ${waitTime}ms (attempt ${retryCount}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue;
+      } else {
+        throw error;
+      }
+    } finally {
+      if (client) {
+        client.release();
+        client = undefined;
+      }
+    }
   }
+  
+  throw new Error('Transaction failed after all retry attempts');
 }

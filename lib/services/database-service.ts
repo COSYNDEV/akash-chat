@@ -170,7 +170,7 @@ export class DatabaseService {
   }
 
   async saveChatMessage(
-    chatSessionId: string, 
+    chatSessionId: string,
     role: 'user' | 'assistant' | 'system',
     content: string,
     position: number,
@@ -179,8 +179,8 @@ export class DatabaseService {
     try {
       // Encrypt message content
       const encryptedContent = await this.encryptionService.encryptForDatabase(content);
-      
-      const message = await createChatMessage({
+
+      const message = await createChatMessage(this.userId, {
         chat_session_id: chatSessionId,
         role,
         position,
@@ -193,9 +193,9 @@ export class DatabaseService {
       return { success: true, data: message };
     } catch (error) {
       console.error('Failed to save chat message:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }
@@ -254,26 +254,26 @@ export class DatabaseService {
 
   async loadChatMessages(chatSessionId: string): Promise<DatabaseOperationResult<ChatMessage[]>> {
     try {
-      const messages = await getChatMessages(chatSessionId);
+      const messages = await getChatMessages(this.userId, chatSessionId);
       return { success: true, data: messages };
     } catch (error) {
       console.error('Failed to load chat messages:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }
 
   async loadBulkChatMessages(chatSessionIds: string[]): Promise<DatabaseOperationResult<Map<string, ChatMessage[]>>> {
     try {
-      const messagesByChat = await getBulkChatMessages(chatSessionIds);
+      const messagesByChat = await getBulkChatMessages(this.userId, chatSessionIds);
       return { success: true, data: messagesByChat };
     } catch (error) {
       console.error('Failed to load bulk chat messages:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }
@@ -295,26 +295,26 @@ export class DatabaseService {
         }
       }
 
-      const updatedSession = await updateChatSession(chatSessionId, updatesToSave);
+      const updatedSession = await updateChatSession(this.userId, chatSessionId, updatesToSave);
       return { success: true, data: updatedSession };
     } catch (error) {
       console.error('Failed to update chat session:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }
 
   async deleteChatSession(chatSessionId: string): Promise<DatabaseOperationResult<void>> {
     try {
-      await deleteChatSession(chatSessionId);
+      await deleteChatSession(this.userId, chatSessionId);
       return { success: true };
     } catch (error) {
       console.error('Failed to delete chat session:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }
@@ -405,7 +405,7 @@ export class DatabaseService {
   async updateUserFolder(folderId: string, updates: { name?: string; color?: string; position?: number }): Promise<DatabaseOperationResult<Folder>> {
     try {
       const dbUpdates: Partial<Folder> = {};
-      
+
       // Handle name encryption if name is being updated
       if (updates.name !== undefined) {
         const encryptedName = await encryptFolderName(updates.name, this.userId);
@@ -415,27 +415,27 @@ export class DatabaseService {
           dbUpdates.name_tag = encryptedName.content_tag;
         }
       }
-      
-      const folder = await updateFolder(folderId, dbUpdates);
+
+      const folder = await updateFolder(this.userId, folderId, dbUpdates);
       return { success: true, data: folder };
     } catch (error) {
       console.error('Failed to update folder:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }
 
   async deleteUserFolder(folderId: string): Promise<DatabaseOperationResult<void>> {
     try {
-      await deleteFolder(folderId);
+      await deleteFolder(this.userId, folderId);
       return { success: true };
     } catch (error) {
       console.error('Failed to delete folder:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }

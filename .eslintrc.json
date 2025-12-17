@@ -75,24 +75,7 @@
     "@next/next/no-styled-jsx-in-document": ["warn"],
     "@next/next/no-title-in-document-head": ["warn"],
     "@next/next/no-typos": ["warn"],
-    "import/order": [
-      "error",
-      {
-        "groups": [
-          "builtin",
-          "external",
-          "internal",
-          "parent",
-          "sibling",
-          "index"
-        ],
-        "newlines-between": "always",
-        "alphabetize": {
-          "order": "asc",
-          "caseInsensitive": false
-        }
-      }
-    ],
+    "import/order": "off",
     "import/no-unresolved": ["off"],
     "import/no-anonymous-default-export": ["warn"],
     "no-empty": ["warn"],
@@ -104,7 +87,11 @@
     },
     "import/resolver": {
       "typescript": {
-        "alwaysTryTypes": true
+        "alwaysTryTypes": true,
+        "project": "./tsconfig.json"
+      },
+      "node": {
+        "extensions": [".js", ".jsx", ".ts", ".tsx"]
       }
     }
   },

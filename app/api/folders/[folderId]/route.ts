@@ -7,10 +7,11 @@ import { createDatabaseService } from '@/lib/services/database-service';
 export const PATCH = withErrorHandling(
   requireAuth(async (
     request: NextRequest, 
-    userId: string, 
-    { params }: { params: Promise<{ folderId: string }> }
+    userId: string,
+    _user: any,
+    context: { params: Promise<{ folderId: string }> }
   ) => {
-    const { folderId } = await params;
+    const { folderId } = await context.params;
     
     if (!folderId) {
       throw new ValidationError('Folder ID is required');
@@ -54,9 +55,10 @@ export const DELETE = withErrorHandling(
   requireAuth(async (
     _request: NextRequest,
     userId: string,
-    { params }: { params: Promise<{ folderId: string }> }
+    _user: any,
+    context: { params: Promise<{ folderId: string }> }
   ) => {
-    const { folderId } = await params;
+    const { folderId } = await context.params;
     
     if (!folderId) {
       throw new ValidationError('Folder ID is required');

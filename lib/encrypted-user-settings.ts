@@ -232,7 +232,7 @@ export async function updateEncryptedPrompt(
       encryptedUpdates.content_tag = contentEncrypted.content_tag;
     }
     
-    await updateSavedPrompt(promptId, encryptedUpdates);
+    await updateSavedPrompt(userId, promptId, encryptedUpdates);
   } catch (error) {
     console.error('Failed to update prompt:', error);
     throw error;
@@ -242,9 +242,9 @@ export async function updateEncryptedPrompt(
 /**
  * Delete a saved prompt
  */
-export async function deleteEncryptedPrompt(promptId: string): Promise<void> {
+export async function deleteEncryptedPrompt(userId: string, promptId: string): Promise<void> {
   try {
-    await deleteSavedPrompt(promptId);
+    await deleteSavedPrompt(userId, promptId);
   } catch (error) {
     console.error('Failed to delete prompt:', error);
     throw error;

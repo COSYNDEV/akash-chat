@@ -253,7 +253,7 @@ async function getAvailableModelsFromDatabase(tierName: string): Promise<Model[]
         
         // If this is a connection timeout, log it specifically
         if (error instanceof Error && error.message.includes('connection timeout')) {
-            console.warn('[MODELS] Database connection timeout - this may indicate network issues with Supabase');
+            console.warn('[MODELS] Database connection timeout - this may indicate network issues');
         }
         
         // Fallback to static config - need to convert to database format

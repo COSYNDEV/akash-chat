@@ -79,7 +79,7 @@ export const POST = withErrorHandling(
         if (!data?.promptId) {
           throw new ValidationError('Prompt ID is required');
         }
-        await deleteEncryptedPrompt(data.promptId);
+        await deleteEncryptedPrompt(userId, data.promptId);
         return createSuccessResponse({ message: 'Prompt deleted' });
 
       case 'reorder_prompts':
