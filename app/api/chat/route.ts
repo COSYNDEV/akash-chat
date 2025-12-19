@@ -26,7 +26,7 @@ function createOpenAIWithRateLimit(apiKey: string) {
     fetch: async (url, options) => {
       // Inject required kwargs for DeepSeek V3.1 to enable thinking. Workaround for old ai sdk version.
       const body = JSON.parse(options!.body as string || '{}');
-      if (body.model === 'deepseek-ai/DeepSeek-V3.1' || body.model === 'DeepSeek-V3.1') {
+      if (body.model.includes('deepseek-ai/DeepSeek-V3.') || body.model === 'DeepSeek-V3.1') {
         options!.body = JSON.stringify({
           ...body,
           chat_template_kwargs: {
