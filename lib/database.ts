@@ -133,7 +133,6 @@ export async function getUserPreferences(userId: string): Promise<UserPreference
 
 // Folder Operations
 export async function createFolder(userId: string, name: string): Promise<Folder> {
-  // Encrypt the folder name
   const encryptedName = await encryptFolderName(name, userId);
   if (!encryptedName) {
     throw new Error('Failed to encrypt folder name');
@@ -169,7 +168,6 @@ export async function folderExists(userId: string, folderId: string): Promise<bo
 }
 
 export async function findFolderByName(userId: string, folderName: string): Promise<Folder | null> {
-  // Get all user folders and decrypt to find match
   const query = 'SELECT * FROM get_user_folders($1)';
   const result = await executeQuery<Folder>(query, [userId]);
 
@@ -177,7 +175,6 @@ export async function findFolderByName(userId: string, folderName: string): Prom
     return null;
   }
 
-  // Decrypt folder names and find match
   const folders = result.rows;
   for (const folder of folders) {
     if (folder.name_encrypted && folder.name_iv && folder.name_tag) {
@@ -192,7 +189,6 @@ export async function findFolderByName(userId: string, folderName: string): Prom
           return folder;
         }
       } catch (error) {
-        // Skip if decryption fails
         continue;
       }
     }
@@ -361,7 +357,6 @@ export async function getBulkChatMessages(userId: string, chatSessionIds: string
   const query = 'SELECT * FROM get_bulk_chat_messages($1, $2)';
   const result = await executeQuery<ChatMessage>(query, [userId, chatSessionIds]);
 
-  // Group messages by chat session ID
   const messagesByChat = new Map<string, ChatMessage[]>();
 
   for (const message of result.rows) {

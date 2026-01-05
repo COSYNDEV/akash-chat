@@ -37,7 +37,6 @@ function createOpenAIWithRateLimit(apiKey: string) {
 
       const response = await fetch(url, options);
 
-      // Only process streaming responses
       if (response.headers.get('content-type')?.includes('text/event-stream')) {
         let reasoningBuffer = '';
         let isFirstContent = true;
@@ -53,12 +52,10 @@ function createOpenAIWithRateLimit(apiKey: string) {
                 try {
                   const data = JSON.parse(line.slice(6));
 
-                  // Capture reasoning content
                   if (data.choices?.[0]?.delta?.reasoning_content) {
                     reasoningBuffer += data.choices[0].delta.reasoning_content;
                   }
 
-                  // Inject reasoning before first content
                   if (data.choices?.[0]?.delta?.content && isFirstContent && reasoningBuffer) {
                     isFirstContent = false;
 
@@ -103,39 +100,31 @@ function createOpenAIWithRateLimit(apiKey: string) {
   });
 }
 
-// Create custom OpenAI provider instance with reasoning injection
 const openai = createOpenAIWithRateLimit(apiKey);
 
-// Define the handler function to be wrapped with authentication
 async function handlePostRequest(req: NextRequest) {
-  // Check Auth0 authentication first
   const session = await getSession(req, NextResponse.next());
   const isAuthenticated = !!session?.user;
-  
-  // Get user-specific API key for authenticated users
+
   let userApiKey: string | null = null;
-  let openaiClient = openai; // Default to admin client
-  
+  let openaiClient = openai;
+
   if (isAuthenticated && session?.user?.sub) {
     userApiKey = await LiteLLMService.getApiKey(session.user.sub);
-    
-    // Create user-specific OpenAI client if user has API key
+
     if (userApiKey) {
       openaiClient = createOpenAIWithRateLimit(userApiKey);
     }
   }
-  
-  // Apply rate limiting to all users (unless ACCESS_TOKEN is required)
+
   const isAccessTokenRequired = process.env.ACCESS_TOKEN && process.env.ACCESS_TOKEN.trim() !== '';
   let rateLimitIdentifier: string | null = null;
   
   const shouldApplyRateLimit = !isAccessTokenRequired;
-  
+
   if (shouldApplyRateLimit) {
-    // Determine user ID for database-driven rate limiting
     const userId = isAuthenticated && session?.user?.sub ? session.user.sub : null;
-    
-    // Use Auth0 user ID for authenticated users, IP for anonymous
+
     rateLimitIdentifier = userId || getClientIP(req);
     
     const rateLimitConfig = await getRateLimitConfigForUser(userId);
@@ -164,15 +153,12 @@ async function handlePostRequest(req: NextRequest) {
       );
     }
   }
-  
-  // Extract the `messages` and `model` from the body of the request
+
   const body = await req.json();
   const { messages, system, context } = body;
-  // Ensure temperature and topP are numbers
   const temperature = body.temperature ? Number(body.temperature) : undefined;
   const topP = body.topP ? Number(body.topP) : undefined;
   let { model } = body;
-  // Helper to normalize model format
   const normalizeModel = (model: any) => ({
     model_id: model.model_id || model.id,
     token_limit: model.token_limit || model.tokenLimit,
@@ -180,14 +166,11 @@ async function handlePostRequest(req: NextRequest) {
     top_p: model.top_p,
   });
 
-  // Get user ID for model access validation (authenticated users vs anonymous)
   const userId = isAuthenticated && session?.user?.sub ? session.user.sub : null;
-  
-  // Get available models for this specific user (considers tier access)
+
   const allModels = await getAvailableModelsForUser(userId);
   const dbModel = allModels.find(m => m.model_id === model);
-  
-  // Validate that user has access to this model
+
   if (!dbModel) {
     return new Response(
       JSON.stringify({
@@ -242,10 +225,9 @@ async function handlePostRequest(req: NextRequest) {
         const availableTokens = tokenLimit - tokenCount - 1000;
         const errorMessage = "[Message too long for this model. Please try with a shorter message or a different model.]";
 
-        if (availableTokens > 100) { // Ensure we have enough tokens for a meaningful truncation
-          // Calculate how much content we can actually fit
-          const maxContentTokens = availableTokens - 50; // Reserve tokens for truncation notice
-          const truncatedContent = message.content.slice(0, Math.floor(maxContentTokens * 3.5)); // Rough estimate: 1 token ≈ 3.5 chars
+        if (availableTokens > 100) {
+          const maxContentTokens = availableTokens - 50;
+          const truncatedContent = message.content.slice(0, Math.floor(maxContentTokens * 3.5));
           messagesToSend = [{
             ...message,
             content: truncatedContent + "\n\n[Message truncated due to length]"
@@ -276,7 +258,6 @@ async function handlePostRequest(req: NextRequest) {
     }
   }
 
-  // Store conversation token count for rate limit status display
   if (shouldApplyRateLimit && rateLimitIdentifier) {
     try {
       await storeConversationTokens(
@@ -292,9 +273,7 @@ async function handlePostRequest(req: NextRequest) {
   encoding.free();
 
   if (model === 'AkashGen') {
-    // Skip the image generation tool if it fails
     try {
-      // Send the message to a small model first to determine if it's an image request
       const smallModelId = imgGenFnModel || 'Meta-Llama-3-3-70B-Instruct';
       const smallResponse = await generateText({
         model: openaiClient(smallModelId),
@@ -307,18 +286,15 @@ async function handlePostRequest(req: NextRequest) {
         topP: topP || selectedModel?.top_p
       });
 
-      // If the small model used the image generation tool, return the result
       if (smallResponse.toolResults.length > 0) {
         const imageResult = smallResponse.toolResults[0].result;
-        
-        // Track token usage for image generation
+
         if (shouldApplyRateLimit && rateLimitIdentifier && smallResponse.usage) {
           const totalTokens = (smallResponse.usage.promptTokens || 0) + (smallResponse.usage.completionTokens || 0);
           if (totalTokens > 0) {
             try {
               const userId = isAuthenticated && session?.user?.sub ? session.user.sub : null;
               const rateLimitConfig = await getRateLimitConfigForUser(userId);
-              // Use model from body for token multiplier calculation
               await incrementTokenUsageWithMultiplier(rateLimitIdentifier, totalTokens, model, rateLimitConfig);
             } catch (error) {
               console.error('Failed to track token usage for image generation:', error);
@@ -346,7 +322,6 @@ async function handlePostRequest(req: NextRequest) {
         );
       }
 
-      // If the small model didn't use the image generation tool, use the default model for the rest of the conversation
       model = 'Meta-Llama-3-3-70B-Instruct';
     } catch (error) {
       return new Response(
@@ -376,8 +351,7 @@ async function handlePostRequest(req: NextRequest) {
         topP: topP || selectedModel?.top_p,
 
       });
-      
-      // Track token usage for rate limiting
+
       result.usage.then(async (usage) => {
         if (shouldApplyRateLimit && rateLimitIdentifier && usage) {
           const totalTokens = (usage.promptTokens || 0) + (usage.completionTokens || 0);
@@ -385,7 +359,6 @@ async function handlePostRequest(req: NextRequest) {
             try {
               const userId = isAuthenticated && session?.user?.sub ? session.user.sub : null;
               const rateLimitConfig = await getRateLimitConfigForUser(userId);
-              // Use model from body for token multiplier calculation
               await incrementTokenUsageWithMultiplier(rateLimitIdentifier, totalTokens, model, rateLimitConfig);
             } catch (error) {
               console.error('Failed to track token usage:', error);
@@ -399,10 +372,8 @@ async function handlePostRequest(req: NextRequest) {
       result.mergeIntoDataStream(dataStream);
     },
     onError: error => {
-      // Handle specific OpenAI errors
       if (error instanceof Error) {
         if (error.name === 'OpenAIError') {
-          // Return user-friendly error messages for common OpenAI errors
           if (error.message.includes('Rate limit')) {
             return 'Rate limit exceeded. Please try again later.';
           } else if (error.message.includes('Invalid API key')) {
@@ -418,5 +389,4 @@ async function handlePostRequest(req: NextRequest) {
   });
 }
 
-// Export the wrapped handler
 export const POST = withSessionAuth(handlePostRequest);

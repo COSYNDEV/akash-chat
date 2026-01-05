@@ -16,7 +16,6 @@ import { withErrorHandling, createSuccessResponse, validateRequestBody, Validati
 
 export const GET = withErrorHandling(
   requireAuth(async (_request: NextRequest, userId: string, _user: any) => {
-    // Get user preferences and saved prompts
     const [preferences, savedPrompts] = await Promise.all([
       getDecryptedUserPreferences(userId),
       getDecryptedSavedPrompts(userId)

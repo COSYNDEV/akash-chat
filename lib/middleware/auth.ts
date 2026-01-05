@@ -8,13 +8,8 @@ export interface AuthMiddlewareResult {
   error?: NextResponse;
 }
 
-/**
- * Authentication middleware for API routes
- * Validates session and extracts user information
- */
 export async function withAuth0Auth(request: NextRequest): Promise<AuthMiddlewareResult> {
   try {
-    // DEV MODE: Bypass Auth0 with hardcoded test user
     if (process.env.NODE_ENV === 'development' && process.env.DEV_BYPASS_AUTH === 'true') {
       const devUserId = process.env.DEV_USER_ID || 'dev-test-user';
       console.log('[DEV MODE] Using hardcoded test user:', devUserId);
@@ -54,10 +49,6 @@ export async function withAuth0Auth(request: NextRequest): Promise<AuthMiddlewar
   }
 }
 
-/**
- * Higher-order function to wrap API route handlers with authentication
- * Supports Next.js 15 context structure where params are in context object
- */
 export function requireAuth<T extends any[]>(
   handler: (request: NextRequest, userId: string, user: any, ...args: T) => Promise<NextResponse>
 ) {
@@ -67,10 +58,7 @@ export function requireAuth<T extends any[]>(
     if (!authResult.success) {
       return authResult.error!;
     }
-    
-    // Next.js 15 passes context as the first arg after request
-    // If args[0] is an object with params, it's the context object
-    // Otherwise, pass args as-is
+
     return handler(request, authResult.userId!, authResult.user!, ...args);
   };
 }

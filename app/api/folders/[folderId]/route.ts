@@ -17,10 +17,8 @@ export const PATCH = withErrorHandling(
       throw new ValidationError('Folder ID is required');
     }
 
-    // Validate request body
     const updates = await validateRequestBody(request);
-    
-    // Validate that at least one field is being updated
+
     const allowedFields = ['name', 'position'];
     const hasValidUpdates = allowedFields.some(field => updates[field] !== undefined);
     
@@ -28,17 +26,14 @@ export const PATCH = withErrorHandling(
       throw new ValidationError('At least one field must be provided for update');
     }
 
-    // Create database service
     const dbService = createDatabaseService(userId);
 
-    // Prepare update data
     const updateData: any = {
       updated_at: new Date().toISOString()
     };
 
     if (updates.name !== undefined) {updateData.name = updates.name;}
 
-    // Update folder using database service
     const result = await dbService.updateUserFolder(folderId, updateData);
 
     if (!result.success) {
@@ -64,10 +59,8 @@ export const DELETE = withErrorHandling(
       throw new ValidationError('Folder ID is required');
     }
 
-    // Create database service
     const dbService = createDatabaseService(userId);
 
-    // Delete folder using database service
     const result = await dbService.deleteUserFolder(folderId);
 
     if (!result.success) {

@@ -3,16 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { auth0Management } from '@/lib/auth0-management';
 
-/**
- * Check if dev auth bypass is enabled
- */
 function isDevBypassEnabled() {
   return process.env.NODE_ENV === 'development' && process.env.DEV_BYPASS_AUTH === 'true';
 }
 
-/**
- * Get dev user for verification status (always verified in dev mode)
- */
 function getDevVerificationStatus() {
   return NextResponse.json({
     emailVerified: true,
@@ -34,7 +28,6 @@ function getDevVerificationStatus() {
 
 export async function GET(req: NextRequest) {
   try {
-    // DEV MODE: Return always verified status
     if (isDevBypassEnabled()) {
       return getDevVerificationStatus();
     }
@@ -49,11 +42,9 @@ export async function GET(req: NextRequest) {
     }
 
     const userId = session.user.sub;
-    
-    // Get user data from Auth0
+
     const userData = await auth0Management.getUserData(userId);
-    
-    // Check verification status
+
     const emailVerified = userData.email_verified === true;
     const marketingConsent = userData.user_metadata?.marketing_consent === true;
     const isFullyVerified = emailVerified && marketingConsent;
@@ -87,7 +78,6 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    // DEV MODE: Return always verified status
     if (isDevBypassEnabled()) {
       return NextResponse.json({ 
         success: true,
@@ -114,7 +104,6 @@ export async function POST(req: NextRequest) {
     const userId = session.user.sub;
     await auth0Management.updateUserMetadata(userId, { marketing_consent: consent });
 
-    // Return updated verification status
     const userData = await auth0Management.getUserData(userId);
     const emailVerified = userData.email_verified === true;
     const marketingConsent = userData.user_metadata?.marketing_consent === true;

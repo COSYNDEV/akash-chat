@@ -91,45 +91,36 @@ export class DatabaseService {
       let originalFolderId: string | undefined;
       let newFolderId: string | undefined;
 
-      // If chat references a folder, check if it exists in database
       if (chat.folder_id) {
         try {
           const exists = await folderExists(this.userId, chat.folder_id);
           if (!exists && folderInfo?.name) {
-            // Folder ID doesn't exist, but check if folder with same name already exists
             const existingFolder = await findFolderByName(this.userId, folderInfo.name);
             if (existingFolder?.id) {
-              // Folder exists with same name, just update the ID
               originalFolderId = chat.folder_id;
               newFolderId = existingFolder.id;
               chat = { ...chat, folder_id: newFolderId };
               needsFolderUpdate = true;
             } else {
-              // Folder doesn't exist at all - create it
               originalFolderId = chat.folder_id;
               const folderResult = await this.createUserFolder(folderInfo.name);
-              
+
               if (folderResult.success && folderResult.data) {
-                // Update chat to use database folder ID
                 newFolderId = folderResult.data.id!;
                 chat = { ...chat, folder_id: newFolderId };
                 needsFolderUpdate = true;
               } else {
-                // Failed to create folder, remove reference
                 chat = { ...chat, folder_id: undefined };
               }
             }
           } else if (!exists) {
-            // Folder doesn't exist and no folder info provided, remove reference
             chat = { ...chat, folder_id: undefined };
           }
         } catch (error) {
-          // Error checking folder existence, remove reference to be safe
           chat = { ...chat, folder_id: undefined };
         }
       }
 
-      // Encrypt chat name if present
       let chatToSave = { ...chat };
       if (chat.name) {
         const encryptedName = await encryptChatName(chat.name, this.userId);
@@ -149,7 +140,6 @@ export class DatabaseService {
         user_id: this.userId
       });
 
-      // Include folder update info in response
       const responseData = {
         ...chatSession,
         ...(needsFolderUpdate && {
@@ -177,7 +167,6 @@ export class DatabaseService {
     tokenCount?: number,
   ): Promise<DatabaseOperationResult<ChatMessage>> {
     try {
-      // Encrypt message content
       const encryptedContent = await this.encryptionService.encryptForDatabase(content);
 
       const message = await createChatMessage(this.userId, {
@@ -208,7 +197,6 @@ export class DatabaseService {
         return { success: true, data: [] };
       }
 
-      // Collect all encrypted names for batch decryption
       const encryptedNames = [];
       const nameMapping = new Map<string, number>();
       
@@ -224,12 +212,10 @@ export class DatabaseService {
         }
       }
 
-      // Batch decrypt all names
       const nameDecryptResults = encryptedNames.length > 0 
         ? await this.encryptionService.decryptBatchSafe(encryptedNames)
         : [];
 
-      // Build final chat objects with decrypted names
       const decryptedChats = chats.map((chat) => {
         const nameIndex = nameMapping.get(chat.id!);
         const decryptedName = nameIndex !== undefined 
@@ -280,7 +266,6 @@ export class DatabaseService {
 
   async updateChatSession(chatSessionId: string, updates: Partial<ChatSession & { name?: string }>): Promise<DatabaseOperationResult<ChatSession>> {
     try {
-      // Handle name encryption if updating name
       let updatesToSave: Partial<ChatSession> = { ...updates };
       if (updates.name !== undefined) {
         const encryptedName = await encryptChatName(updates.name, this.userId);
@@ -322,14 +307,12 @@ export class DatabaseService {
   // Folder Operations
   async createUserFolder(name: string): Promise<DatabaseOperationResult<Folder>> {
     const lockKey = `${this.userId}:${name}`;
-    
-    // Check if there's already a creation in progress for this user/folder combo
+
     const existingLock = folderCreationLocks.get(lockKey);
     if (existingLock) {
       return existingLock;
     }
-    
-    // Create a new lock for this folder creation
+
     const creationPromise = this._createUserFolderInternal(name);
     folderCreationLocks.set(lockKey, creationPromise);
     
@@ -337,19 +320,16 @@ export class DatabaseService {
       const result = await creationPromise;
       return result;
     } finally {
-      // Always clean up the lock when done
       folderCreationLocks.delete(lockKey);
     }
   }
 
   private async _createUserFolderInternal(name: string): Promise<DatabaseOperationResult<Folder>> {
     try {
-      // Try to create the folder first - if it fails due to uniqueness constraint, find existing
       try {
         const folder = await createFolder(this.userId, name);
         return { success: true, data: folder };
       } catch (createError: any) {
-        // If creation failed due to uniqueness constraint, find the existing folder
         if (createError?.message?.includes('unique') || createError?.code === '23505') {
           const existingFolder = await findFolderByName(this.userId, name);
           
@@ -359,7 +339,6 @@ export class DatabaseService {
             throw createError;
           }
         } else {
-          // Some other error, re-throw it
           throw createError;
         }
       }
@@ -375,8 +354,7 @@ export class DatabaseService {
   async loadUserFolders(): Promise<DatabaseOperationResult<Array<Folder & { name: string }>>> {
     try {
       const folders = await getUserFolders(this.userId);
-      
-      // Decrypt folder names
+
       const decryptedFolders = await Promise.all(
         folders.map(async (folder) => {
           const name = await decryptFolderName({
@@ -406,7 +384,6 @@ export class DatabaseService {
     try {
       const dbUpdates: Partial<Folder> = {};
 
-      // Handle name encryption if name is being updated
       if (updates.name !== undefined) {
         const encryptedName = await encryptFolderName(updates.name, this.userId);
         if (encryptedName) {

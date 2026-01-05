@@ -16,7 +16,6 @@ export async function DELETE(
     const { chatId } = await params;
     const dbService = createDatabaseService(authResult.userId!);
 
-    // Delete the chat session (will cascade delete messages automatically)
     const result = await dbService.deleteChatSession(chatId);
 
     if (!result.success) {
@@ -48,10 +47,8 @@ export async function PATCH(
     const { chatId } = await params;
     const updates = await request.json();
 
-    // Use database service for encrypted chat updates
     const dbService = createDatabaseService(authResult.userId!);
-    
-    // Prepare update object with proper field mapping
+
     const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString()
     };
@@ -63,7 +60,6 @@ export async function PATCH(
       updateData.folder_id = updates.folderId;
     }
 
-    // Update the chat session using database service
     const result = await dbService.updateChatSession(chatId, updateData);
 
     if (!result.success) {
