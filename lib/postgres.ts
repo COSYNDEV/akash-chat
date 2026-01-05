@@ -3,9 +3,7 @@ import { Pool, PoolClient } from 'pg';
 let _pool: Pool | null = null;
 let signalHandlersRegistered = false;
 
-// Getter function for PostgreSQL connection pool
 export function getPostgresPool(): Pool {
-  // Only allow server-side usage
   if (typeof window !== 'undefined') {
     throw new Error('PostgreSQL pool can only be used on the server side (API routes, server components)');
   }
@@ -24,30 +22,23 @@ export function getPostgresPool(): Pool {
 
     _pool = new Pool({
       connectionString: databaseUrl,
-      // Connection pool settings optimized for Supabase
-      max: 10, // Maximum number of clients in pool (reduced for better resource management)
-      min: 2,  // Keep minimum connections alive
-      idleTimeoutMillis: 60000, // Close idle clients after 60 seconds
-      connectionTimeoutMillis: 10000, // Increased timeout to 10 seconds for Supabase
-      // SSL configuration for Supabase (always required)
+      max: 5,
+      min: 1,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
       ssl: { rejectUnauthorized: false },
-      // Query timeout
       query_timeout: 30000,
-      // Connection keep-alive
       keepAlive: true,
       keepAliveInitialDelayMillis: 10000
     });
 
-    // Handle pool errors
     _pool.on('error', (err) => {
       console.error('[DB] PostgreSQL pool error:', err);
-      // Reset pool on critical errors
       if (err.message.includes('Connection terminated') || err.message.includes('ECONNRESET')) {
-        _pool = null; // This will cause a new pool to be created on next access
+        _pool = null;
       }
     });
 
-    // Register signal handlers only once
     if (!signalHandlersRegistered) {
       signalHandlersRegistered = true;
 
@@ -70,7 +61,6 @@ export function getPostgresPool(): Pool {
   return _pool;
 }
 
-// Test database connection
 export async function testConnection(): Promise<boolean> {
   try {
     await executeQuery('SELECT 1 as test');
@@ -81,7 +71,6 @@ export async function testConnection(): Promise<boolean> {
   }
 }
 
-// Helper function to execute queries with proper error handling and retry logic
 export async function executeQuery<T = any>(
   text: string, 
   params?: any[]
@@ -100,14 +89,16 @@ export async function executeQuery<T = any>(
         rowCount: result.rowCount || 0
       };
     } catch (error: any) {
-      // Release client if we got one
       if (client) {
         client.release();
         client = undefined;
       }
 
-      // Check if this is a connection error we should retry
+      const isMaxClientsError = error.message.includes('MaxClientsInSessionMode') || 
+                                 error.message.includes('max clients reached');
+      
       const shouldRetry = retryCount < maxRetries && (
+        isMaxClientsError ||
         error.message.includes('connection timeout') ||
         error.message.includes('Connection terminated') ||
         error.message.includes('ECONNRESET') ||
@@ -118,7 +109,9 @@ export async function executeQuery<T = any>(
 
       if (shouldRetry) {
         retryCount++;
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        const waitTime = isMaxClientsError ? 2000 : 1000;
+        console.log(`[DB] Connection pool exhausted, retrying in ${waitTime}ms (attempt ${retryCount}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
         continue;
       } else {
         console.error('[DB] Query failed:', error);
@@ -134,7 +127,6 @@ export async function executeQuery<T = any>(
   throw new Error('Query failed after all retry attempts');
 }
 
-// Helper function for single row queries
 export async function executeQuerySingle<T = any>(
   text: string, 
   params?: any[]
@@ -143,22 +135,56 @@ export async function executeQuerySingle<T = any>(
   return result.rows[0] || null;
 }
 
-// Helper function for transactions
 export async function withTransaction<T>(
   callback: (client: PoolClient) => Promise<T>
 ): Promise<T> {
   const pool = getPostgresPool();
-  const client = await pool.connect();
+  let client: PoolClient | undefined;
+  let retryCount = 0;
+  const maxRetries = 2;
   
-  try {
-    await client.query('BEGIN');
-    const result = await callback(client);
-    await client.query('COMMIT');
-    return result;
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
+  while (retryCount <= maxRetries) {
+    try {
+      client = await pool.connect();
+      await client.query('BEGIN');
+      const result = await callback(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error: any) {
+      if (client) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackError) {
+        }
+      }
+
+      const isMaxClientsError = error.message.includes('MaxClientsInSessionMode') || 
+                                 error.message.includes('max clients reached');
+      
+      const shouldRetry = retryCount < maxRetries && (
+        isMaxClientsError ||
+        error.message.includes('connection timeout') ||
+        error.message.includes('Connection terminated') ||
+        error.message.includes('ECONNRESET') ||
+        error.code === 'ECONNRESET'
+      );
+
+      if (shouldRetry) {
+        retryCount++;
+        const waitTime = isMaxClientsError ? 2000 : 1000;
+        console.log(`[DB] Transaction connection pool exhausted, retrying in ${waitTime}ms (attempt ${retryCount}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue;
+      } else {
+        throw error;
+      }
+    } finally {
+      if (client) {
+        client.release();
+        client = undefined;
+      }
+    }
   }
+  
+  throw new Error('Transaction failed after all retry attempts');
 }

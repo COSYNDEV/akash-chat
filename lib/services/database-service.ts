@@ -91,45 +91,36 @@ export class DatabaseService {
       let originalFolderId: string | undefined;
       let newFolderId: string | undefined;
 
-      // If chat references a folder, check if it exists in database
       if (chat.folder_id) {
         try {
           const exists = await folderExists(this.userId, chat.folder_id);
           if (!exists && folderInfo?.name) {
-            // Folder ID doesn't exist, but check if folder with same name already exists
             const existingFolder = await findFolderByName(this.userId, folderInfo.name);
             if (existingFolder?.id) {
-              // Folder exists with same name, just update the ID
               originalFolderId = chat.folder_id;
               newFolderId = existingFolder.id;
               chat = { ...chat, folder_id: newFolderId };
               needsFolderUpdate = true;
             } else {
-              // Folder doesn't exist at all - create it
               originalFolderId = chat.folder_id;
               const folderResult = await this.createUserFolder(folderInfo.name);
-              
+
               if (folderResult.success && folderResult.data) {
-                // Update chat to use database folder ID
                 newFolderId = folderResult.data.id!;
                 chat = { ...chat, folder_id: newFolderId };
                 needsFolderUpdate = true;
               } else {
-                // Failed to create folder, remove reference
                 chat = { ...chat, folder_id: undefined };
               }
             }
           } else if (!exists) {
-            // Folder doesn't exist and no folder info provided, remove reference
             chat = { ...chat, folder_id: undefined };
           }
         } catch (error) {
-          // Error checking folder existence, remove reference to be safe
           chat = { ...chat, folder_id: undefined };
         }
       }
 
-      // Encrypt chat name if present
       let chatToSave = { ...chat };
       if (chat.name) {
         const encryptedName = await encryptChatName(chat.name, this.userId);
@@ -149,7 +140,6 @@ export class DatabaseService {
         user_id: this.userId
       });
 
-      // Include folder update info in response
       const responseData = {
         ...chatSession,
         ...(needsFolderUpdate && {
@@ -170,17 +160,16 @@ export class DatabaseService {
   }
 
   async saveChatMessage(
-    chatSessionId: string, 
+    chatSessionId: string,
     role: 'user' | 'assistant' | 'system',
     content: string,
     position: number,
     tokenCount?: number,
   ): Promise<DatabaseOperationResult<ChatMessage>> {
     try {
-      // Encrypt message content
       const encryptedContent = await this.encryptionService.encryptForDatabase(content);
-      
-      const message = await createChatMessage({
+
+      const message = await createChatMessage(this.userId, {
         chat_session_id: chatSessionId,
         role,
         position,
@@ -193,9 +182,9 @@ export class DatabaseService {
       return { success: true, data: message };
     } catch (error) {
       console.error('Failed to save chat message:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }
@@ -208,7 +197,6 @@ export class DatabaseService {
         return { success: true, data: [] };
       }
 
-      // Collect all encrypted names for batch decryption
       const encryptedNames = [];
       const nameMapping = new Map<string, number>();
       
@@ -224,12 +212,10 @@ export class DatabaseService {
         }
       }
 
-      // Batch decrypt all names
       const nameDecryptResults = encryptedNames.length > 0 
         ? await this.encryptionService.decryptBatchSafe(encryptedNames)
         : [];
 
-      // Build final chat objects with decrypted names
       const decryptedChats = chats.map((chat) => {
         const nameIndex = nameMapping.get(chat.id!);
         const decryptedName = nameIndex !== undefined 
@@ -254,33 +240,32 @@ export class DatabaseService {
 
   async loadChatMessages(chatSessionId: string): Promise<DatabaseOperationResult<ChatMessage[]>> {
     try {
-      const messages = await getChatMessages(chatSessionId);
+      const messages = await getChatMessages(this.userId, chatSessionId);
       return { success: true, data: messages };
     } catch (error) {
       console.error('Failed to load chat messages:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }
 
   async loadBulkChatMessages(chatSessionIds: string[]): Promise<DatabaseOperationResult<Map<string, ChatMessage[]>>> {
     try {
-      const messagesByChat = await getBulkChatMessages(chatSessionIds);
+      const messagesByChat = await getBulkChatMessages(this.userId, chatSessionIds);
       return { success: true, data: messagesByChat };
     } catch (error) {
       console.error('Failed to load bulk chat messages:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }
 
   async updateChatSession(chatSessionId: string, updates: Partial<ChatSession & { name?: string }>): Promise<DatabaseOperationResult<ChatSession>> {
     try {
-      // Handle name encryption if updating name
       let updatesToSave: Partial<ChatSession> = { ...updates };
       if (updates.name !== undefined) {
         const encryptedName = await encryptChatName(updates.name, this.userId);
@@ -295,26 +280,26 @@ export class DatabaseService {
         }
       }
 
-      const updatedSession = await updateChatSession(chatSessionId, updatesToSave);
+      const updatedSession = await updateChatSession(this.userId, chatSessionId, updatesToSave);
       return { success: true, data: updatedSession };
     } catch (error) {
       console.error('Failed to update chat session:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }
 
   async deleteChatSession(chatSessionId: string): Promise<DatabaseOperationResult<void>> {
     try {
-      await deleteChatSession(chatSessionId);
+      await deleteChatSession(this.userId, chatSessionId);
       return { success: true };
     } catch (error) {
       console.error('Failed to delete chat session:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }
@@ -322,14 +307,12 @@ export class DatabaseService {
   // Folder Operations
   async createUserFolder(name: string): Promise<DatabaseOperationResult<Folder>> {
     const lockKey = `${this.userId}:${name}`;
-    
-    // Check if there's already a creation in progress for this user/folder combo
+
     const existingLock = folderCreationLocks.get(lockKey);
     if (existingLock) {
       return existingLock;
     }
-    
-    // Create a new lock for this folder creation
+
     const creationPromise = this._createUserFolderInternal(name);
     folderCreationLocks.set(lockKey, creationPromise);
     
@@ -337,19 +320,16 @@ export class DatabaseService {
       const result = await creationPromise;
       return result;
     } finally {
-      // Always clean up the lock when done
       folderCreationLocks.delete(lockKey);
     }
   }
 
   private async _createUserFolderInternal(name: string): Promise<DatabaseOperationResult<Folder>> {
     try {
-      // Try to create the folder first - if it fails due to uniqueness constraint, find existing
       try {
         const folder = await createFolder(this.userId, name);
         return { success: true, data: folder };
       } catch (createError: any) {
-        // If creation failed due to uniqueness constraint, find the existing folder
         if (createError?.message?.includes('unique') || createError?.code === '23505') {
           const existingFolder = await findFolderByName(this.userId, name);
           
@@ -359,7 +339,6 @@ export class DatabaseService {
             throw createError;
           }
         } else {
-          // Some other error, re-throw it
           throw createError;
         }
       }
@@ -375,8 +354,7 @@ export class DatabaseService {
   async loadUserFolders(): Promise<DatabaseOperationResult<Array<Folder & { name: string }>>> {
     try {
       const folders = await getUserFolders(this.userId);
-      
-      // Decrypt folder names
+
       const decryptedFolders = await Promise.all(
         folders.map(async (folder) => {
           const name = await decryptFolderName({
@@ -405,8 +383,7 @@ export class DatabaseService {
   async updateUserFolder(folderId: string, updates: { name?: string; color?: string; position?: number }): Promise<DatabaseOperationResult<Folder>> {
     try {
       const dbUpdates: Partial<Folder> = {};
-      
-      // Handle name encryption if name is being updated
+
       if (updates.name !== undefined) {
         const encryptedName = await encryptFolderName(updates.name, this.userId);
         if (encryptedName) {
@@ -415,27 +392,27 @@ export class DatabaseService {
           dbUpdates.name_tag = encryptedName.content_tag;
         }
       }
-      
-      const folder = await updateFolder(folderId, dbUpdates);
+
+      const folder = await updateFolder(this.userId, folderId, dbUpdates);
       return { success: true, data: folder };
     } catch (error) {
       console.error('Failed to update folder:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }
 
   async deleteUserFolder(folderId: string): Promise<DatabaseOperationResult<void>> {
     try {
-      await deleteFolder(folderId);
+      await deleteFolder(this.userId, folderId);
       return { success: true };
     } catch (error) {
       console.error('Failed to delete folder:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }

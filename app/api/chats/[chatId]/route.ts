@@ -1,6 +1,6 @@
-import { getSession } from '@auth0/nextjs-auth0';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { withAuth0Auth } from '@/lib/middleware/auth';
 import { createDatabaseService } from '@/lib/services/database-service';
 
 export async function DELETE(
@@ -8,15 +8,14 @@ export async function DELETE(
   { params }: { params: Promise<{ chatId: string }> }
 ) {
   try {
-    const session = await getSession(request, new NextResponse());
-    if (!session?.user?.sub) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const authResult = await withAuth0Auth(request);
+    if (!authResult.success) {
+      return authResult.error!;
     }
 
     const { chatId } = await params;
-    const dbService = createDatabaseService(session.user.sub);
+    const dbService = createDatabaseService(authResult.userId!);
 
-    // Delete the chat session (will cascade delete messages automatically)
     const result = await dbService.deleteChatSession(chatId);
 
     if (!result.success) {
@@ -40,18 +39,16 @@ export async function PATCH(
   { params }: { params: Promise<{ chatId: string }> }
 ) {
   try {
-    const session = await getSession(request, new NextResponse());
-    if (!session?.user?.sub) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const authResult = await withAuth0Auth(request);
+    if (!authResult.success) {
+      return authResult.error!;
     }
 
     const { chatId } = await params;
     const updates = await request.json();
 
-    // Use database service for encrypted chat updates
-    const dbService = createDatabaseService(session.user.sub);
-    
-    // Prepare update object with proper field mapping
+    const dbService = createDatabaseService(authResult.userId!);
+
     const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString()
     };
@@ -63,7 +60,6 @@ export async function PATCH(
       updateData.folder_id = updates.folderId;
     }
 
-    // Update the chat session using database service
     const result = await dbService.updateChatSession(chatId, updateData);
 
     if (!result.success) {

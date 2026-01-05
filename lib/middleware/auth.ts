@@ -8,14 +8,26 @@ export interface AuthMiddlewareResult {
   error?: NextResponse;
 }
 
-/**
- * Authentication middleware for API routes
- * Validates session and extracts user information
- */
 export async function withAuth0Auth(request: NextRequest): Promise<AuthMiddlewareResult> {
   try {
+    if (process.env.NODE_ENV === 'development' && process.env.DEV_BYPASS_AUTH === 'true') {
+      const devUserId = process.env.DEV_USER_ID || 'dev-test-user';
+      console.log('[DEV MODE] Using hardcoded test user:', devUserId);
+
+      return {
+        success: true,
+        userId: devUserId,
+        user: {
+          sub: devUserId,
+          email: 'dev@test.com',
+          name: 'Dev Test User',
+          picture: null
+        }
+      };
+    }
+
     const session = await getSession(request, new NextResponse());
-    
+
     if (!session?.user?.sub) {
       return {
         success: false,
@@ -37,9 +49,6 @@ export async function withAuth0Auth(request: NextRequest): Promise<AuthMiddlewar
   }
 }
 
-/**
- * Higher-order function to wrap API route handlers with authentication
- */
 export function requireAuth<T extends any[]>(
   handler: (request: NextRequest, userId: string, user: any, ...args: T) => Promise<NextResponse>
 ) {
@@ -49,7 +58,7 @@ export function requireAuth<T extends any[]>(
     if (!authResult.success) {
       return authResult.error!;
     }
-    
+
     return handler(request, authResult.userId!, authResult.user!, ...args);
   };
 }
