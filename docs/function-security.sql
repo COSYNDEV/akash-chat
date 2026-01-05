@@ -1,13 +1,13 @@
 -- ============================================================================
--- Function-Based Security
+-- Function-Based
 -- ============================================================================
 -- This approach uses PostgreSQL functions to enforce user_id filtering
 --
--- Security Model:
+-- Steps:
 --   1. Create functions that require user_id parameter
 --   2. REVOKE direct table access from frontend_user
 --   3. GRANT EXECUTE on functions only
---   4. Database enforces filtering - impossible to bypass
+--   4. Database enforces filtering
 -- ============================================================================
 
 -- ============================================================================
