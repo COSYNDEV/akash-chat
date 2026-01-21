@@ -1,6 +1,6 @@
-import { getSession } from '@auth0/nextjs-auth0';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 
+import { getOptionalSession } from '@/lib/auth';
 import { checkTokenLimit, getClientIP, getRateLimitConfigForUser, getConversationTokens } from '@/lib/rate-limit';
 
 export async function GET(req: NextRequest) {
@@ -21,8 +21,8 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Check authentication status
-    const session = await getSession(req, NextResponse.next());
+    // Check authentication status (optional - works without Auth0)
+    const session = await getOptionalSession(req);
     const isAuthenticated = !!session?.user;
     
     // Determine rate limit identifier and config

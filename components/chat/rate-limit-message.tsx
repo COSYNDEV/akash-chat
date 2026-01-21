@@ -1,6 +1,8 @@
 import { useUser } from '@auth0/nextjs-auth0/client';
 import { LogIn, Clock } from 'lucide-react';
 
+import { useAuthStatus } from '@/hooks/use-auth-status';
+
 import { Button } from "../ui/button";
 
 interface RateLimitMessageProps {
@@ -10,6 +12,8 @@ interface RateLimitMessageProps {
 export function RateLimitMessage({ getTimeRemaining }: RateLimitMessageProps) {
   const { user } = useUser();
   const isAuthenticated = !!user;
+  const { authEnabled } = useAuthStatus();
+
   return (
     <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 space-y-3 min-h-[24px] flex flex-col justify-center">
       <div className="flex items-center justify-center gap-2 text-destructive font-medium text-sm">
@@ -18,7 +22,7 @@ export function RateLimitMessage({ getTimeRemaining }: RateLimitMessageProps) {
         </svg>
         <span>Limit reached</span>
       </div>
-      
+
       <div className="text-center space-y-2">
         <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
           <Clock className="w-3 h-3" />
@@ -26,7 +30,7 @@ export function RateLimitMessage({ getTimeRemaining }: RateLimitMessageProps) {
         </div>
       </div>
 
-      {!isAuthenticated && (
+      {!isAuthenticated && authEnabled && (
         <Button
           size="sm"
           className="w-full h-8 text-xs"

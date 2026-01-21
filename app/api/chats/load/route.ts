@@ -1,12 +1,16 @@
-import { getSession } from '@auth0/nextjs-auth0';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { getOptionalSession, isAuth0Configured } from '@/lib/auth';
 import { createDatabaseService } from '@/lib/services/database-service';
 import { createEncryptionService } from '@/lib/services/encryption-service';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getSession(request, new NextResponse());
+    if (!isAuth0Configured()) {
+      return NextResponse.json({ chatSessions: [], count: 0 });
+    }
+
+    const session = await getOptionalSession(request);
     if (!session?.user?.sub) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

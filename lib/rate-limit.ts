@@ -187,39 +187,51 @@ export async function incrementTokenUsage(
   tokenCount: number,
   config: RateLimitConfig = DEFAULT_ANONYMOUS_LIMIT
 ): Promise<RateLimit> {
+  const now = Date.now();
+
+  // If Redis is not available, skip tracking
+  if (!redis) {
+    return {
+      limit: config.maxTokens,
+      used: 0,
+      remaining: config.maxTokens,
+      resetTime: new Date(now + config.windowMs),
+      blocked: false,
+    };
+  }
+
   const tokenKey = `${config.keyPrefix}${identifier}`;
   const timestampKey = `${config.keyPrefix}${identifier}:start`;
-  const now = Date.now();
-  
+
   try {
     // Check if this is the first request for this IP
     const pipeline = redis.pipeline();
     pipeline.get(tokenKey);
     pipeline.get(timestampKey);
-    
+
     const results = await pipeline.exec();
     if (!results || results.length !== 2) {
       throw new Error('Redis pipeline failed');
     }
-    
+
     const currentTokens = parseInt((results[0][1] as string) || '0');
     let windowStartTime = parseInt((results[1][1] as string) || '0');
-    
+
     if (!windowStartTime) {
       windowStartTime = now;
     }
-    
+
     const used = currentTokens + tokenCount;
     const resetTime = new Date(windowStartTime + config.windowMs);
     const ttlSeconds = Math.ceil((resetTime.getTime() - now) / 1000);
-    
+
     // Update both token count and start time with same TTL
     const updatePipeline = redis.pipeline();
     updatePipeline.setex(tokenKey, ttlSeconds, used.toString());
     updatePipeline.setex(timestampKey, ttlSeconds, windowStartTime.toString());
-    
+
     await updatePipeline.exec();
-    
+
     const rateLimit: RateLimit = {
       limit: config.maxTokens,
       used,
@@ -227,11 +239,11 @@ export async function incrementTokenUsage(
       resetTime,
       blocked: used > config.maxTokens,
     };
-    
+
     return rateLimit;
   } catch (error) {
     console.error('Token usage tracking failed:', error);
-    
+
     const resetTime = new Date(now + config.windowMs);
     return {
       limit: config.maxTokens,
@@ -250,29 +262,41 @@ export async function checkTokenLimit(
   identifier: string,
   config: RateLimitConfig = DEFAULT_ANONYMOUS_LIMIT
 ): Promise<RateLimit> {
+  const now = Date.now();
+
+  // If Redis is not available, disable rate limiting
+  if (!redis) {
+    return {
+      limit: config.maxTokens,
+      used: 0,
+      remaining: config.maxTokens,
+      resetTime: new Date(now + config.windowMs),
+      blocked: false,
+    };
+  }
+
   const tokenKey = `${config.keyPrefix}${identifier}`;
   const timestampKey = `${config.keyPrefix}${identifier}:start`;
-  const now = Date.now();
-  
+
   try {
     // Get current token count and start timestamp
     const pipeline = redis.pipeline();
     pipeline.get(tokenKey);
     pipeline.get(timestampKey);
-    
+
     const results = await pipeline.exec();
     if (!results || results.length !== 2) {
       throw new Error('Redis pipeline failed');
     }
-    
+
     const currentTokens = parseInt((results[0][1] as string) || '0');
     const windowStartTime = parseInt((results[1][1] as string) || '0');
-    
+
     // If no start time exists, user hasn't made any requests yet
-    const resetTime = windowStartTime 
+    const resetTime = windowStartTime
       ? new Date(windowStartTime + config.windowMs)
       : new Date(now + config.windowMs);
-    
+
     return {
       limit: config.maxTokens,
       used: currentTokens,
@@ -282,7 +306,7 @@ export async function checkTokenLimit(
     };
   } catch (error) {
     console.error('Token limit check failed:', error);
-    
+
     // Fallback
     const resetTime = new Date(now + config.windowMs);
     return {
@@ -303,16 +327,18 @@ export async function storeConversationTokens(
   tokenCount: number,
   modelTokenLimit: number
 ): Promise<void> {
+  if (!redis) {return;}
+
   const conversationKey = `conversation_tokens:${identifier}`;
   const ttlSeconds = 4 * 60 * 60;
-  
+
   try {
     const data = JSON.stringify({
       tokens: tokenCount,
       modelLimit: modelTokenLimit,
       timestamp: Date.now()
     });
-    
+
     await redis.setex(conversationKey, ttlSeconds, data);
   } catch (error) {
     console.error('Failed to store conversation tokens:', error);
@@ -327,14 +353,16 @@ export async function getConversationTokens(identifier: string): Promise<{
   modelLimit: number;
   timestamp: number;
 } | null> {
+  if (!redis) {return null;}
+
   const conversationKey = `conversation_tokens:${identifier}`;
-  
+
   try {
     const data = await redis.get(conversationKey);
     if (!data) {
       return null;
     }
-    
+
     return JSON.parse(data);
   } catch (error) {
     console.error('Failed to get conversation tokens:', error);

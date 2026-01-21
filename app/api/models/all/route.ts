@@ -1,8 +1,9 @@
-import { getSession } from '@auth0/nextjs-auth0';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { apiEndpoint, apiKey } from '@/app/config/api';
+import { getOptionalSession } from '@/lib/auth';
 import { getUserTier, getAllModels } from '@/lib/database';
+import { isDatabaseAvailable } from '@/lib/postgres';
 
 // Models that are always available regardless of LiteLLM API status
 const ALWAYS_AVAILABLE_MODELS = ['AkashGen'];
@@ -40,22 +41,11 @@ interface ModelWithAccess {
 
 export async function GET(req: NextRequest) {
   try {
-    // Check if user is authenticated
-    const session = await getSession(req, NextResponse.next());
+    // Check if user is authenticated (optional - works without Auth0)
+    const session = await getOptionalSession(req);
     const userId = session?.user?.sub || null;
-    
-    // Get user's tier
-    let userTier = null;
-    if (userId) {
-      userTier = await getUserTier(userId);
-    } 
-    
-    const userTierName = userTier?.name || 'permissionless';
-    
-    // Get all models from database (across all tiers)
-    const allModels = await getAllModels();
-    
-    // Check which models are currently available via LiteLLM API
+
+    // Check which models are currently available via API
     let apiModels: any[] = [];
     try {
       const response = await fetch(apiEndpoint + '/models', {
@@ -66,10 +56,58 @@ export async function GET(req: NextRequest) {
       const apiData = await response.json();
       apiModels = apiData.data || [];
     } catch (error) {
-      console.warn('[API] Failed to fetch from LiteLLM API:', error);
-      // Continue with empty array - models will be marked as unavailable
+      console.warn('[API] Failed to fetch from API:', error);
     }
-    
+
+    // If database is not available, return models directly from API
+    if (!isDatabaseAvailable()) {
+      const modelsFromApi = apiModels.map((apiModel: any) => ({
+        id: apiModel.id,
+        model_id: apiModel.id,
+        api_id: apiModel.id,
+        name: apiModel.id.split('/').pop() || apiModel.id,
+        description: `${apiModel.id} model`,
+        tier_requirement: 'permissionless',
+        available: true,
+        temperature: 0.7,
+        top_p: 0.95,
+        token_limit: 128000,
+        owned_by: apiModel.owned_by,
+        display_order: 0,
+        user_has_access: true,
+        is_available_now: true,
+        action_button: 'start_chat' as const,
+        action_text: 'Start Chat'
+      }));
+
+      return NextResponse.json({
+        models: modelsFromApi,
+        user_tier: 'permissionless',
+        stats: {
+          total_models: modelsFromApi.length,
+          available_now: modelsFromApi.length,
+          user_accessible: modelsFromApi.length,
+          user_available: modelsFromApi.length,
+          by_tier: {
+            permissionless: modelsFromApi.length,
+            extended: 0,
+            pro: 0
+          }
+        }
+      });
+    }
+
+    // Get user's tier
+    let userTier = null;
+    if (userId) {
+      userTier = await getUserTier(userId);
+    }
+
+    const userTierName = userTier?.name || 'permissionless';
+
+    // Get all models from database (across all tiers)
+    const allModels = await getAllModels();
+
     // Create set of available API model IDs for quick lookup
     const availableApiIds = new Set(apiModels.map(model => model.id));
     

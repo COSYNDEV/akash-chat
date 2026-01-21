@@ -1,12 +1,12 @@
-import { getSession } from '@auth0/nextjs-auth0';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { getOptionalSession } from '@/lib/auth';
 import { getAvailableModelsForUser } from '@/lib/models';
 
 export async function GET(req: NextRequest) {
     try {
-        // Check if user is authenticated
-        const session = await getSession(req, NextResponse.next());
+        // Check if user is authenticated (optional - works without Auth0)
+        const session = await getOptionalSession(req);
         const userId = session?.user?.sub || null;
                 
         // Get models based on user's tier (or anonymous/permissionless for non-logged-in users)
