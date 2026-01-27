@@ -12,6 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useAuthStatus } from '@/hooks/use-auth-status';
 import { cleanupUserDataOnLogout } from '@/lib/data-sync';
 import { cn } from '@/lib/utils';
 
@@ -22,6 +23,7 @@ interface UserMenuProps {
 export function UserMenu({ className }: UserMenuProps) {
   const { user, isLoading } = useUser();
   const { resetAllState } = useChatContext();
+  const { authEnabled, isLoading: authLoading } = useAuthStatus();
 
   const handleLogout = () => {
     
@@ -39,13 +41,18 @@ export function UserMenu({ className }: UserMenuProps) {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || authLoading) {
     return (
       <div className={cn("w-8 h-8 rounded-full bg-muted animate-pulse", className)} />
     );
   }
 
+  // Don't show sign in button if auth is not configured
   if (!user) {
+    if (!authEnabled) {
+      return null;
+    }
+
     return (
       <Button
         variant="ghost"

@@ -1,11 +1,7 @@
-import { getSession } from '@auth0/nextjs-auth0';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { getOptionalSession, isAuth0Configured, isDevBypassEnabled } from '@/lib/auth';
 import { auth0Management } from '@/lib/auth0-management';
-
-function isDevBypassEnabled() {
-  return process.env.NODE_ENV === 'development' && process.env.DEV_BYPASS_AUTH === 'true';
-}
 
 function getDevVerificationStatus() {
   return NextResponse.json({
@@ -28,11 +24,11 @@ function getDevVerificationStatus() {
 
 export async function GET(req: NextRequest) {
   try {
-    if (isDevBypassEnabled()) {
+    if (isDevBypassEnabled() || !isAuth0Configured()) {
       return getDevVerificationStatus();
     }
 
-    const session = await getSession(req, NextResponse.next());
+    const session = await getOptionalSession(req);
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -78,8 +74,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    if (isDevBypassEnabled()) {
-      return NextResponse.json({ 
+    if (isDevBypassEnabled() || !isAuth0Configured()) {
+      return NextResponse.json({
         success: true,
         emailVerified: true,
         marketingConsent: true,
@@ -87,7 +83,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const session = await getSession(req, NextResponse.next());
+    const session = await getOptionalSession(req);
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

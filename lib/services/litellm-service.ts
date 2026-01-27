@@ -46,18 +46,20 @@ export class LiteLLMService {
     }
 
     // Check Redis cache
-    try {
-      const cachedData = await redis.get(this.JWT_REDIS_KEY);
-      if (cachedData) {
-        const cached = JSON.parse(cachedData) as JWTTokenCache;
-        // Use cached token if more than 5 minutes remaining
-        if (Date.now() < cached.expiresAt - 5 * 60 * 1000) {
-          this.jwtTokenCache = cached;
-          return cached.token;
+    if (redis) {
+      try {
+        const cachedData = await redis.get(this.JWT_REDIS_KEY);
+        if (cachedData) {
+          const cached = JSON.parse(cachedData) as JWTTokenCache;
+          // Use cached token if more than 5 minutes remaining
+          if (Date.now() < cached.expiresAt - 5 * 60 * 1000) {
+            this.jwtTokenCache = cached;
+            return cached.token;
+          }
         }
+      } catch (error) {
+        console.error('Failed to get JWT from Redis:', error);
       }
-    } catch (error) {
-      console.error('Failed to get JWT from Redis:', error);
     }
 
     // Check if static token from env is still valid
@@ -72,11 +74,13 @@ export class LiteLLMService {
         };
         this.jwtTokenCache = tokenCache;
 
-        try {
-          const ttlSeconds = Math.floor((expiration - Date.now()) / 1000);
-          await redis.set(this.JWT_REDIS_KEY, JSON.stringify(tokenCache), 'EX', ttlSeconds);
-        } catch (error) {
-          console.error('Failed to cache static JWT in Redis:', error);
+        if (redis) {
+          try {
+            const ttlSeconds = Math.floor((expiration - Date.now()) / 1000);
+            await redis.set(this.JWT_REDIS_KEY, JSON.stringify(tokenCache), 'EX', ttlSeconds);
+          } catch (error) {
+            console.error('Failed to cache static JWT in Redis:', error);
+          }
         }
 
         return staticToken;
@@ -133,11 +137,13 @@ export class LiteLLMService {
       this.jwtTokenCache = tokenCache;
 
       // Store in Redis with TTL
-      try {
-        const ttlSeconds = Math.floor((expiresAt - Date.now()) / 1000);
-        await redis.set(this.JWT_REDIS_KEY, JSON.stringify(tokenCache), 'EX', ttlSeconds);
-      } catch (error) {
-        console.error('Failed to cache JWT in Redis:', error);
+      if (redis) {
+        try {
+          const ttlSeconds = Math.floor((expiresAt - Date.now()) / 1000);
+          await redis.set(this.JWT_REDIS_KEY, JSON.stringify(tokenCache), 'EX', ttlSeconds);
+        } catch (error) {
+          console.error('Failed to cache JWT in Redis:', error);
+        }
       }
 
       console.log('JWT token refreshed successfully');
@@ -240,6 +246,8 @@ export class LiteLLMService {
    * Store API key in Redis for fast session access
    */
   private static async storeApiKeyInRedis(userId: string, apiKey: string): Promise<void> {
+    if (!redis) {return;}
+
     const keyData: LiteLLMApiKey = {
       key: apiKey,
       userId,
@@ -256,14 +264,16 @@ export class LiteLLMService {
    * Get API key from Redis cache
    */
   private static async getApiKeyFromRedis(userId: string): Promise<string | null> {
+    if (!redis) {return null;}
+
     try {
       const redisKey = `${this.REDIS_PREFIX}${userId}`;
       const data = await redis.get(redisKey);
-      
+
       if (!data) {return null;}
 
       const keyData = JSON.parse(data) as LiteLLMApiKey;
-      
+
       // Check if expired
       if (Date.now() > keyData.expiresAt) {
         await redis.del(redisKey);

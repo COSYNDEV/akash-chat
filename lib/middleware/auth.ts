@@ -1,5 +1,6 @@
-import { getSession } from '@auth0/nextjs-auth0';
 import { NextRequest, NextResponse } from 'next/server';
+
+import { getOptionalSession, isAuth0Configured } from '@/lib/auth';
 
 export interface AuthMiddlewareResult {
   success: boolean;
@@ -26,7 +27,14 @@ export async function withAuth0Auth(request: NextRequest): Promise<AuthMiddlewar
       };
     }
 
-    const session = await getSession(request, new NextResponse());
+    if (!isAuth0Configured()) {
+      return {
+        success: false,
+        error: NextResponse.json({ error: 'Authentication not configured' }, { status: 401 })
+      };
+    }
+
+    const session = await getOptionalSession(request);
 
     if (!session?.user?.sub) {
       return {

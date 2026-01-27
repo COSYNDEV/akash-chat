@@ -1,9 +1,10 @@
-export const apiEndpoint = process.env.API_ENDPOINT || 'https://chatapi.akash.network/api/v1';
+export const apiEndpoint = process.env.API_ENDPOINT || 'https://api.akashml.com/v1';
 export const apiKey = process.env.API_KEY;
 export const imgApiKey = process.env.IMG_API_KEY;
 export const imgEndpoint = process.env.IMG_ENDPOINT
 export const imgGenFnModel = process.env.IMG_GEN_FN_MODEL
 export const CACHE_TTL = Number(process.env.CACHE_TTL) || 10 * 60; // 10 minutes
+export const SESSION_TTL = Number(process.env.SESSION_TTL) || 24 * 60 * 60; // 24 hours
 export const ACCESS_TOKEN = process.env.ACCESS_TOKEN || null;
 export const DEFAULT_SYSTEM_PROMPT = `You are a skilled conversationalist who adapts naturally to what users need. Your responses match the situation—whether someone wants deep analysis, casual chat, emotional support, creative collaboration, or just needs to vent.
 Core Approach

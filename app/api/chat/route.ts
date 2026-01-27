@@ -1,13 +1,12 @@
 import { createOpenAI } from '@ai-sdk/openai';
-import { getSession } from '@auth0/nextjs-auth0';
 import { streamText, createDataStreamResponse, generateText, simulateReadableStream, Message } from 'ai';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import cl100k_base from "tiktoken/encoders/cl100k_base.json";
 import { Tiktoken } from "tiktoken/lite";
 
 import { apiEndpoint, apiKey, imgGenFnModel, DEFAULT_SYSTEM_PROMPT } from '@/app/config/api';
 import { defaultModel } from '@/app/config/models';
-import { withSessionAuth } from '@/lib/auth';
+import { withSessionAuth, getOptionalSession } from '@/lib/auth';
 import { getAvailableModelsForUser } from '@/lib/models';
 import { checkTokenLimit, incrementTokenUsageWithMultiplier, getClientIP, getRateLimitConfigForUser, storeConversationTokens } from '@/lib/rate-limit';
 import { LiteLLMService } from '@/lib/services/litellm-service';
@@ -103,7 +102,7 @@ function createOpenAIWithRateLimit(apiKey: string) {
 const openai = createOpenAIWithRateLimit(apiKey);
 
 async function handlePostRequest(req: NextRequest) {
-  const session = await getSession(req, NextResponse.next());
+  const session = await getOptionalSession(req);
   const isAuthenticated = !!session?.user;
 
   let userApiKey: string | null = null;

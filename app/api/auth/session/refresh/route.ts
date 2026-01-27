@@ -3,24 +3,21 @@ import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 
 import { CACHE_TTL } from '@/app/config/api';
-import { checkApiAccessToken } from '@/lib/auth';
-import { validateSession, storeSession } from '@/lib/redis';
-import redis from '@/lib/redis';
+import redis, { validateSession, storeSession, isRedisAvailable } from '@/lib/redis';
 
 const RATE_LIMIT_WINDOW = Math.floor(CACHE_TTL * 0.20 * 0.25);
 const MAX_REQUESTS = 3;
 
 async function isRateLimited(token: string): Promise<boolean> {
+    if (!redis) {return false;}
+
     const key = `ratelimit:refresh:${token}`;
     const now = Math.floor(Date.now() / 1000);
 
     try {
         await redis.zadd(key, now, now.toString());
-
         await redis.zremrangebyscore(key, 0, now - RATE_LIMIT_WINDOW);
-
         const requestCount = await redis.zcard(key);
-
         await redis.expire(key, RATE_LIMIT_WINDOW);
 
         return requestCount > MAX_REQUESTS;
@@ -53,9 +50,9 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'No session token found' }, { status: 401 });
         }
 
-        const authCheckResponse = checkApiAccessToken(request);
-        if (authCheckResponse) {
-            return authCheckResponse;
+        // Skip session management if Redis is not available
+        if (!isRedisAvailable()) {
+            return NextResponse.json({ success: true });
         }
 
         if (await isRateLimited(currentToken)) {
@@ -64,7 +61,7 @@ export async function POST(request: Request) {
                 { status: 429 }
             );
         }
-        const ttl = await redis.ttl(`session:${currentToken}`);
+        const ttl = await redis!.ttl(`session:${currentToken}`);
         const isValid = await validateSession(currentToken);
 
         if (isValid && ttl > CACHE_TTL * 0.20) {

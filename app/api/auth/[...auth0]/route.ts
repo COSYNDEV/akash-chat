@@ -1,3 +1,4 @@
+import { isAuth0Configured, isDevBypassEnabled } from '@/lib/auth';
 import { handleAuth } from '@auth0/nextjs-auth0';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -24,10 +25,6 @@ function getDevUser() {
     email_verified: true,
     updated_at: new Date().toISOString(),
   };
-}
-
-function isDevBypassEnabled() {
-  return process.env.NODE_ENV === 'development' && process.env.DEV_BYPASS_AUTH === 'true';
 }
 
 function handleDevLogin(request: NextRequest): NextResponse {
@@ -77,16 +74,36 @@ export async function GET(request: NextRequest, context: { params: Promise<{ aut
   const params = await context.params;
   const route = params.auth0?.[0];
 
-  if (isDevBypassEnabled()) {
+  // Handle dev bypass or when Auth0 is not configured
+  if (isDevBypassEnabled() || !isAuth0Configured()) {
     switch (route) {
       case 'login':
+        if (!isAuth0Configured()) {
+          return NextResponse.json({ error: 'Authentication not configured' }, { status: 501 });
+        }
         return handleDevLogin(request);
       case 'logout':
+        if (!isAuth0Configured()) {
+          return NextResponse.redirect(new URL('/', request.url));
+        }
         return handleDevLogout(request);
       case 'me':
+        if (!isAuth0Configured()) {
+          return NextResponse.json(null, { status: 401 });
+        }
         return handleDevMe(request);
       case 'callback':
         return NextResponse.redirect(new URL('/', request.url));
+      case 'session':
+      case 'status':
+        if (!isAuth0Configured()) {
+          return NextResponse.json({ isAuthenticated: false });
+        }
+        break;
+      default:
+        if (!isAuth0Configured()) {
+          return NextResponse.json({ error: 'Authentication not configured' }, { status: 501 });
+        }
     }
   }
 

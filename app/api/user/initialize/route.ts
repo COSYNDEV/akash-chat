@@ -1,37 +1,20 @@
-import { getSession } from '@auth0/nextjs-auth0';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { getOptionalSession, isAuth0Configured, isDevBypassEnabled } from '@/lib/auth';
 import { getUserPreferences, upsertUserPreferences, updateUserTier } from '@/lib/database';
 import { LiteLLMService } from '@/lib/services/litellm-service';
 
-function isDevBypassEnabled() {
-  return process.env.NODE_ENV === 'development' && process.env.DEV_BYPASS_AUTH === 'true';
-}
-
 export async function POST(req: NextRequest) {
   try {
-    if (isDevBypassEnabled()) {
-      const devUserId = process.env.DEV_USER_ID || 'dev-test-user';
-      try {
-        const existingPreferences = await getUserPreferences(devUserId);
-        return NextResponse.json({ 
-          success: true,
-          isNewUser: !existingPreferences,
-          message: existingPreferences 
-            ? 'User initialized successfully' 
-            : 'New user created and initialized with extended tier'
-        });
-      } catch (error) {
-        console.log('[DEV MODE] User initialize - DB error (ignored):', error);
-        return NextResponse.json({ 
-          success: true,
-          isNewUser: false,
-          message: 'User initialized successfully (dev mode)'
-        });
-      }
+    if (isDevBypassEnabled() || !isAuth0Configured()) {
+      return NextResponse.json({
+        success: true,
+        isNewUser: false,
+        message: 'User initialized successfully (no auth mode)'
+      });
     }
 
-    const session = await getSession(req, NextResponse.next());
+    const session = await getOptionalSession(req);
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

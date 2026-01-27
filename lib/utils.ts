@@ -2,8 +2,6 @@ import type { Message as AIMessage } from 'ai';
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
-import { safeSetItem } from '@/lib/local-storage-manager';
-
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
@@ -24,38 +22,24 @@ export const processMessages = (messages: AIMessage[]): AIMessage[] => {
 };
 
 /**
- * Gets the access token from localStorage
- * @returns The raw access token or null if not found
+ * Validates the access token with the backend
+ * On success, the backend creates a session stored in httpOnly cookies
  */
-export const getAccessToken = () => {
-  if (typeof window === 'undefined') {return null;}
-  
-  const currentToken = localStorage.getItem('akt_priv_access');
-  return currentToken;
-};
+export const validateAccessToken = async (token: string): Promise<boolean> => {
+  if (typeof window === 'undefined' || !token.trim()) {
+    return false;
+  }
 
-/**
- * Hashes the access token with SHA-256 and stores it in localStorage
- * @param token The raw access token to hash and store
- */
-export const storeAccessToken = async (token: string): Promise<void> => {
-  if (typeof window === 'undefined' || !token.trim()) {return;}
-  
   try {
-    // Use SubtleCrypto API for client-side hashing
-    const encoder = new TextEncoder();
-    const data = encoder.encode(token.trim());
-    
-    // Hash the token
-    const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
-    
-    // Convert hash to hex string
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashedToken = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    
-    // Store the hashed token
-    safeSetItem('akt_priv_access', hashedToken);
+    const response = await fetch('/api/auth/session/', {
+      headers: {
+        'Authorization': `Bearer ${token.trim()}`
+      }
+    });
+
+    return response.ok;
   } catch (error) {
-    console.error('Error storing hashed token:', error);
+    console.error('Access token validation failed:', error);
+    return false;
   }
 };

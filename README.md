@@ -50,10 +50,25 @@ AkashChat leverages the decentralized cloud infrastructure of Akash Network, off
 
 ## Getting Started
 
-### Prerequisites
+### Minimal Setup
+
+AkashChat can run with just an API key! The minimal configuration requires:
 
 - Node.js (v18 or higher)
-- Redis server (for caching and session management)
+- `API_KEY` environment variable
+
+Redis, Auth0, Database, and other features are **optional** and only needed for:
+- **Redis**: Session management and caching (without it, uses simple cookie-based sessions)
+- **Auth0 + Database**: Multi-user accounts with persistent chat history
+- **Access Token**: Frontend access control for private instances
+
+### Prerequisites
+
+For the full-featured setup:
+
+- Node.js (v18 or higher)
+- Redis server (optional, for session management and caching)
+- PostgreSQL database (optional, for multi-user support with Auth0)
 - API keys/endpoints for the AI models you want to use
 
 ### Installation
@@ -69,9 +84,17 @@ AkashChat leverages the decentralized cloud infrastructure of Akash Network, off
    npm install
    ```
 
-3. Create a `.env.local` file in the root directory with the following variables:
+3. Create a `.env.local` file in the root directory.
+
+   **Minimal configuration** (only required variables):
    ```env
-   # API Configuration
+   # API Configuration - REQUIRED
+   API_KEY=your_api_key_here
+   ```
+
+   **Full configuration** (all available options):
+   ```env
+   # API Configuration - REQUIRED
    API_KEY=your_api_key_here
    API_ENDPOINT=your_api_endpoint_here
    DEFAULT_MODEL=your_default_model_here
@@ -118,23 +141,23 @@ AkashChat leverages the decentralized cloud infrastructure of Akash Network, off
 
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
-| API_KEY | Authentication key for Akash AI API access | Yes | - |
-| API_ENDPOINT | Base URL for Akash AI API | Yes | https://chatapi.akash.network/api/v1 |
+| **API_KEY** | **Authentication key for Akash AI API access** | **Yes** | **-** |
+| API_ENDPOINT | Base URL for Akash AI API | No | https://api.akashml.com/v1 |
 | DEFAULT_MODEL | Default AI model to use | No | Qwen-QwQ-32B |
-| REDIS_URL | Connection URL for Redis | Yes | redis://localhost:6379 |
-| CACHE_TTL | Cache time-to-live in seconds | No | 600 (10 minutes) |
-| ACCESS_TOKEN | Token for API and frontend protection | No | - |
+| REDIS_URL | Connection URL for Redis (for session management) | No | - |
+| CACHE_TTL | Cache/session time-to-live in seconds | No | 600 (10 minutes) |
+| ACCESS_TOKEN | Token for API and frontend protection (SHA-256 hashed automatically) | No | - |
 | WS_TRANSCRIPTION_URLS | Comma-separated WebSocket URLs for voice transcription | No | - |
 | WS_TRANSCRIPTION_MODEL | Model for voice transcription | No | mobiuslabsgmbh/faster-whisper-large-v3-turbo |
 | IMG_API_KEY | Authentication key for AkashGen image generation | No | - |
 | IMG_ENDPOINT | Endpoint for AkashGen image generation | No | - |
 | IMG_GEN_FN_MODEL | Model for AkashGen image generation | No | - |
-| AUTH0_SECRET | Auth0 session secret for user authentication | No | - |
+| AUTH0_SECRET | Auth0 session secret (required for multi-user mode) | No | - |
 | AUTH0_BASE_URL | Base URL for Auth0 configuration | No | - |
 | AUTH0_ISSUER_BASE_URL | Auth0 issuer base URL | No | - |
 | AUTH0_CLIENT_ID | Auth0 application client ID | No | - |
 | AUTH0_CLIENT_SECRET | Auth0 application client secret | No | - |
-| DATABASE_URL | PostgreSQL connection URL for data persistence | Yes | - |
+| DATABASE_URL | PostgreSQL connection URL (required for multi-user mode) | No | - |
 | LITELLM_BASE_URL | LiteLLM proxy base URL | No | - |
 | LITELLM_API_KEY | LiteLLM proxy API key | No | - |
 

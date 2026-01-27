@@ -1,11 +1,15 @@
-import { getSession } from '@auth0/nextjs-auth0';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { getOptionalSession, isAuth0Configured } from '@/lib/auth';
 import { deleteAllUserData } from '@/lib/database';
 
 export async function DELETE(req: NextRequest) {
   try {
-    const session = await getSession(req, NextResponse.next());
+    if (!isAuth0Configured()) {
+      return NextResponse.json({ error: 'Authentication not configured' }, { status: 401 });
+    }
+
+    const session = await getOptionalSession(req);
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

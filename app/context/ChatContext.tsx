@@ -16,7 +16,7 @@ import { useEncryptedSettings, UserPreferences } from '@/hooks/use-encrypted-set
 import { Folder, useFolders } from '@/hooks/use-folders';
 import { useRateLimit } from '@/hooks/use-rate-limit';
 import { safeSetItem } from '@/lib/local-storage-manager';
-import { getAccessToken, storeAccessToken, processMessages } from '@/lib/utils';
+import { validateAccessToken, processMessages } from '@/lib/utils';
 
 const SELECTED_MODEL_KEY = 'selectedModel';
 const CURRENT_SYSTEM_PROMPT_KEY = 'currentSystemPrompt';
@@ -530,32 +530,32 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (statusResponse.ok) {
           const { requiresAccessToken } = await statusResponse.json();
 
-          // If an access token is required but not present, show the dialog
-          if (requiresAccessToken && !getAccessToken()) {
-            setIsAccessError(true);
-            setSessionInitialized(true);
-            return;
+          // If an access token is required, try to establish session
+          // If it fails (no valid session cookie), show the access token dialog
+          if (requiresAccessToken) {
+            const response = await fetch('/api/auth/session/');
+            if (!response.ok) {
+              const data = await response.json();
+              if (response.status === 403 && data.error === 'Access token required') {
+                setIsAccessError(true);
+                setSessionInitialized(true);
+                return;
+              }
+            }
           }
         }
 
-        const accessToken = getAccessToken();
-        const response = await fetch('/api/auth/session/', accessToken ? {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`
-          }
-        } : {});
+        // Try to establish session (works with or without access token requirement)
+        const response = await fetch('/api/auth/session/');
         if (!response.ok) {
           const data = await response.json();
-          if (response.status === 403 && data.error === 'Invalid Access token' ) {
+          if (response.status === 403 && (data.error === 'Access token required' || data.error === 'Invalid Access token')) {
             setIsAccessError(true);
           } else {
             throw new Error('Failed to initialize session');
           }
         }
         setSessionInitialized(true);
-
-        // Check and cleanup local storage if needed
-        // Storage cleanup is now handled by safeSetItem when errors occur
       } catch (error) {
         setSessionError('Unable to establish a secure session. Please try refreshing the page.');
       }
@@ -696,29 +696,17 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const handleAccessTokenSubmit = async () => {
     if (accessTokenInput.trim()) {
       try {
-        await storeAccessToken(accessTokenInput.trim());
+        const isValid = await validateAccessToken(accessTokenInput.trim());
 
-        // Try to validate the token with the server
-        const response = await fetch('/api/auth/session/', {
-          headers: {
-            'Authorization': `Bearer ${getAccessToken()}`
-          }
-        });
-        
-        if (!response.ok) {
-          const data = await response.json();
-          if (response.status === 403 && data.error === 'Invalid Access token') {
-            setModelError('Access token is invalid. Please check and try again.');
-            return;
-          } else {
-            throw new Error('Failed to validate access token');
-          }
+        if (!isValid) {
+          setModelError('Access token is invalid. Please check and try again.');
+          return;
         }
-        
-        // Token is valid
+
+        // Token is valid and session created
         setIsAccessError(false);
         setModelError(null);
-        
+        setAccessTokenInput('');
         setSessionInitialized(true);
       } catch (error) {
         setModelError('Failed to validate access token. Please try again.');

@@ -55,29 +55,32 @@ class Auth0ManagementService {
     };
 
     // Store in Redis with TTL
-    try {
-      const ttlSeconds = Math.floor((expiresAt - Date.now()) / 1000);
-      await redis.set(this.REDIS_KEY, JSON.stringify(token), 'EX', ttlSeconds);
-    } catch (error) {
-      console.error('Failed to cache Auth0 token in Redis:', error);
-      // Continue without Redis caching
+    if (redis) {
+      try {
+        const ttlSeconds = Math.floor((expiresAt - Date.now()) / 1000);
+        await redis.set(this.REDIS_KEY, JSON.stringify(token), 'EX', ttlSeconds);
+      } catch (error) {
+        console.error('Failed to cache Auth0 token in Redis:', error);
+      }
     }
 
     return token;
   }
 
   private async getTokenFromRedis(): Promise<Auth0Token | null> {
+    if (!redis) {return null;}
+
     try {
       const tokenData = await redis.get(this.REDIS_KEY);
       if (!tokenData) {return null;}
 
       const token = JSON.parse(tokenData) as Auth0Token;
-      
+
       // Verify token is still valid (5 minute buffer)
       if (token.expires_at > (Date.now() + 5 * 60 * 1000)) {
         return token;
       }
-      
+
       // Token expired, remove from Redis
       await redis.del(this.REDIS_KEY);
       return null;
@@ -127,10 +130,12 @@ class Auth0ManagementService {
   }
 
   private async getMarketingConsentFromCache(userId: string): Promise<boolean | null> {
+    if (!redis) {return null;}
+
     try {
       const cacheKey = `${this.CONSENT_CACHE_KEY}:${userId}`;
       const cached = await redis.get(cacheKey);
-      return cached === 'true' ? true : null; // Only return true if explicitly cached as true
+      return cached === 'true' ? true : null;
     } catch (error) {
       console.error('Failed to get marketing consent from cache:', error);
       return null;
@@ -138,13 +143,13 @@ class Auth0ManagementService {
   }
 
   private async cacheMarketingConsent(userId: string, consent: boolean): Promise<void> {
+    if (!redis) {return;}
+
     try {
       const cacheKey = `${this.CONSENT_CACHE_KEY}:${userId}`;
       if (consent) {
-        // Cache true consent for 24 hours
         await redis.set(cacheKey, 'true', 'EX', 24 * 60 * 60);
       } else {
-        // Remove cache if consent is false (don't cache false values)
         await redis.del(cacheKey);
       }
     } catch (error) {

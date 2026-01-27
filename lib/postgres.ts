@@ -3,23 +3,22 @@ import { Pool, PoolClient } from 'pg';
 let _pool: Pool | null = null;
 let signalHandlersRegistered = false;
 
-export function getPostgresPool(): Pool {
+const databaseUrl = process.env.DATABASE_URL;
+
+export function isDatabaseAvailable(): boolean {
+  return !!databaseUrl;
+}
+
+export function getPostgresPool(): Pool | null {
   if (typeof window !== 'undefined') {
-    throw new Error('PostgreSQL pool can only be used on the server side (API routes, server components)');
+    return null;
+  }
+
+  if (!databaseUrl) {
+    return null;
   }
 
   if (!_pool) {
-    const databaseUrl = process.env.DATABASE_URL;
-
-    if (!databaseUrl) {
-      console.error('Server-side environment variables check:', {
-        DATABASE_URL: !!databaseUrl,
-        NODE_ENV: process.env.NODE_ENV,
-        isServer: typeof window === 'undefined'
-      });
-      throw new Error(`Missing DATABASE_URL environment variable. Check your .env.local file for: DATABASE_URL`);
-    }
-
     _pool = new Pool({
       connectionString: databaseUrl,
       max: 5,
@@ -57,7 +56,7 @@ export function getPostgresPool(): Pool {
       });
     }
   }
-  
+
   return _pool;
 }
 
@@ -72,14 +71,19 @@ export async function testConnection(): Promise<boolean> {
 }
 
 export async function executeQuery<T = any>(
-  text: string, 
+  text: string,
   params?: any[]
 ): Promise<{ rows: T[]; rowCount: number }> {
   const pool = getPostgresPool();
+
+  if (!pool) {
+    return { rows: [], rowCount: 0 };
+  }
+
   let client: PoolClient | undefined;
   let retryCount = 0;
   const maxRetries = 2;
-  
+
   while (retryCount <= maxRetries) {
     try {
       client = await pool.connect();
@@ -94,9 +98,9 @@ export async function executeQuery<T = any>(
         client = undefined;
       }
 
-      const isMaxClientsError = error.message.includes('MaxClientsInSessionMode') || 
+      const isMaxClientsError = error.message.includes('MaxClientsInSessionMode') ||
                                  error.message.includes('max clients reached');
-      
+
       const shouldRetry = retryCount < maxRetries && (
         isMaxClientsError ||
         error.message.includes('connection timeout') ||
@@ -123,7 +127,7 @@ export async function executeQuery<T = any>(
       }
     }
   }
-  
+
   throw new Error('Query failed after all retry attempts');
 }
 
@@ -139,10 +143,15 @@ export async function withTransaction<T>(
   callback: (client: PoolClient) => Promise<T>
 ): Promise<T> {
   const pool = getPostgresPool();
+
+  if (!pool) {
+    throw new Error('Database not available');
+  }
+
   let client: PoolClient | undefined;
   let retryCount = 0;
   const maxRetries = 2;
-  
+
   while (retryCount <= maxRetries) {
     try {
       client = await pool.connect();
@@ -158,9 +167,9 @@ export async function withTransaction<T>(
         }
       }
 
-      const isMaxClientsError = error.message.includes('MaxClientsInSessionMode') || 
+      const isMaxClientsError = error.message.includes('MaxClientsInSessionMode') ||
                                  error.message.includes('max clients reached');
-      
+
       const shouldRetry = retryCount < maxRetries && (
         isMaxClientsError ||
         error.message.includes('connection timeout') ||
@@ -185,6 +194,6 @@ export async function withTransaction<T>(
       }
     }
   }
-  
+
   throw new Error('Transaction failed after all retry attempts');
 }

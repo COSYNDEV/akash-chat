@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import { apiEndpoint, apiKey } from '@/app/config/api';
 import { models, createApiToConfigIdMap } from '@/app/config/models';
 import { Model as DatabaseModel } from '@/lib/database';
+import { isDatabaseAvailable } from '@/lib/postgres';
 import redis from '@/lib/redis';
 
 export interface Model extends Omit<DatabaseModel, 'token_multiplier'> {}
@@ -21,11 +22,60 @@ const MODELS_CACHE_TTL = 600;
 
 const ALWAYS_AVAILABLE_MODELS = ['AkashGen'];
 
+/**
+ * Fetch models directly from the API endpoint when database is not available
+ */
+async function getModelsFromApiOnly(): Promise<Model[]> {
+    try {
+        const response = await fetch(apiEndpoint + '/models', {
+            headers: {
+                'Authorization': `Bearer ${apiKey}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`API returned ${response.status}`);
+        }
+
+        const apiModels = await response.json();
+        const modelList = apiModels.data || [];
+
+        return modelList.map((apiModel: OpenAI.Model) => ({
+            id: apiModel.id,
+            model_id: apiModel.id,
+            api_id: apiModel.id,
+            name: apiModel.id.split('/').pop() || apiModel.id,
+            description: `${apiModel.id} model`,
+            tier_requirement: 'permissionless',
+            available: true,
+            temperature: 0.7,
+            top_p: 0.95,
+            token_limit: 128000,
+            owned_by: apiModel.owned_by,
+            parameters: undefined,
+            architecture: undefined,
+            hf_repo: undefined,
+            about_content: undefined,
+            info_content: undefined,
+            thumbnail_id: undefined,
+            deploy_url: undefined,
+            display_order: 0,
+            created_at: undefined,
+            updated_at: undefined,
+        }));
+    } catch (error) {
+        console.error('[MODELS] Error fetching models from API:', error);
+        return [];
+    }
+}
+
 export async function getAvailableModels(): Promise<Model[]> {
     try {
-        const cachedModels = await redis.get(MODELS_CACHE_KEY);
-        if (cachedModels) {
-            return JSON.parse(cachedModels);
+        if (redis) {
+            const cachedModels = await redis.get(MODELS_CACHE_KEY);
+            if (cachedModels) {
+                return JSON.parse(cachedModels);
+            }
         }
 
         const response = await fetch(apiEndpoint + '/models', {
@@ -43,7 +93,7 @@ export async function getAvailableModels(): Promise<Model[]> {
                 if (model.apiId && apiModel.id === model.apiId) {return true;}
                 return false;
             });
-            
+
             return {
                 ...model,
                 available: isAvailableInApi || model.available === true
@@ -70,49 +120,36 @@ export async function getAvailableModels(): Promise<Model[]> {
             ...availableFromConfig,
             ...additionalModels
         ] as Model[];
-        await redis.setex(MODELS_CACHE_KEY, MODELS_CACHE_TTL, JSON.stringify(allModels));
+
+        if (redis) {
+            await redis.setex(MODELS_CACHE_KEY, MODELS_CACHE_TTL, JSON.stringify(allModels));
+        }
 
         return allModels;
     } catch (error) {
         console.error('[MODELS] Error fetching models:', error);
-        console.log('[MODELS] Falling back to static config models');
-        const fallbackModels: Model[] = models.filter(model => model.available === true).map(configModel => ({
-            id: undefined,
-            model_id: configModel.id,
-            api_id: configModel.apiId,
-            name: configModel.name,
-            description: configModel.description,
-            tier_requirement: 'permissionless',
-            available: configModel.available || false,
-            temperature: configModel.temperature,
-            top_p: configModel.top_p,
-            token_limit: configModel.tokenLimit,
-            owned_by: configModel.owned_by,
-            parameters: configModel.parameters,
-            architecture: configModel.architecture,
-            hf_repo: configModel.hf_repo,
-            about_content: configModel.aboutContent,
-            info_content: configModel.infoContent,
-            thumbnail_id: configModel.thumbnailId,
-            deploy_url: configModel.deployUrl,
-            display_order: 0,
-            created_at: undefined,
-            updated_at: undefined,
-        }));
-        return fallbackModels;
+        console.log('[MODELS] Falling back to API-only mode');
+        return await getModelsFromApiOnly();
     }
 }
 
 export async function getAvailableModelsForUser(userId: string | null): Promise<Model[]> {
+    // If database is not available, fall back to API-only mode
+    if (!isDatabaseAvailable()) {
+        return await getModelsFromApiOnly();
+    }
+
     if (!userId) {
         return await getAvailableModelsFromDatabase('permissionless');
     }
 
     try {
         const cacheKey = `${USER_MODELS_CACHE_KEY}:${userId}`;
-        const cachedModels = await redis.get(cacheKey);
-        if (cachedModels) {
-            return JSON.parse(cachedModels);
+        if (redis) {
+            const cachedModels = await redis.get(cacheKey);
+            if (cachedModels) {
+                return JSON.parse(cachedModels);
+            }
         }
 
         const userTier = await import('@/lib/database').then(db => db.getUserTier(userId));
@@ -154,7 +191,9 @@ export async function getAvailableModelsForUser(userId: string | null): Promise<
             })
             .map(toUserFacingModel);
 
-        await redis.setex(cacheKey, MODELS_CACHE_TTL, JSON.stringify(availableUserModels));
+        if (redis) {
+            await redis.setex(cacheKey, MODELS_CACHE_TTL, JSON.stringify(availableUserModels));
+        }
 
         return availableUserModels;
     } catch (error) {
@@ -164,11 +203,18 @@ export async function getAvailableModelsForUser(userId: string | null): Promise<
 }
 
 async function getAvailableModelsFromDatabase(tierName: string): Promise<Model[]> {
+    // If database is not available, fall back to API-only mode
+    if (!isDatabaseAvailable()) {
+        return await getModelsFromApiOnly();
+    }
+
     try {
         const cacheKey = `${MODELS_CACHE_KEY}:tier:${tierName}`;
-        const cachedModels = await redis.get(cacheKey);
-        if (cachedModels) {
-            return JSON.parse(cachedModels);
+        if (redis) {
+            const cachedModels = await redis.get(cacheKey);
+            if (cachedModels) {
+                return JSON.parse(cachedModels);
+            }
         }
 
         const { getModelsForTier } = await import('@/lib/database');
@@ -204,7 +250,9 @@ async function getAvailableModelsFromDatabase(tierName: string): Promise<Model[]
 
         const userFacingModels = availableDbModels.map(toUserFacingModel);
 
-        await redis.setex(cacheKey, MODELS_CACHE_TTL, JSON.stringify(userFacingModels));
+        if (redis) {
+            await redis.setex(cacheKey, MODELS_CACHE_TTL, JSON.stringify(userFacingModels));
+        }
 
         return userFacingModels;
     } catch (error) {
@@ -214,29 +262,7 @@ async function getAvailableModelsFromDatabase(tierName: string): Promise<Model[]
             console.warn('[MODELS] Database connection timeout - this may indicate network issues');
         }
 
-        const fallbackModels: Model[] = models.filter(model => model.available === true).map(configModel => ({
-            id: undefined,
-            model_id: configModel.id,
-            api_id: configModel.apiId,
-            name: configModel.name,
-            description: configModel.description,
-            tier_requirement: 'permissionless',
-            available: configModel.available || false,
-            temperature: configModel.temperature,
-            top_p: configModel.top_p,
-            token_limit: configModel.tokenLimit,
-            owned_by: configModel.owned_by,
-            parameters: configModel.parameters,
-            architecture: configModel.architecture,
-            hf_repo: configModel.hf_repo,
-            about_content: configModel.aboutContent,
-            info_content: configModel.infoContent,
-            thumbnail_id: configModel.thumbnailId,
-            deploy_url: configModel.deployUrl,
-            display_order: 0,
-            created_at: undefined,
-            updated_at: undefined,
-        }));
-        return fallbackModels;
+        // Fall back to API-only mode
+        return await getModelsFromApiOnly();
     }
 } 

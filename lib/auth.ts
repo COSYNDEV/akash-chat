@@ -1,10 +1,47 @@
 import * as crypto from 'crypto';
 
+import { getSession } from '@auth0/nextjs-auth0';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { ACCESS_TOKEN } from '@/app/config/api';
 
-import { validateSession } from './redis';
+import { validateSession, isRedisAvailable } from './redis';
+
+export function isDevBypassEnabled() {
+  return process.env.NODE_ENV === 'development' && process.env.DEV_BYPASS_AUTH === 'true';
+}
+
+export function isAuth0Configured(): boolean {
+  return !!(
+    process.env.AUTH0_SECRET &&
+    process.env.AUTH0_BASE_URL &&
+    process.env.AUTH0_ISSUER_BASE_URL &&
+    process.env.AUTH0_CLIENT_ID &&
+    process.env.AUTH0_CLIENT_SECRET
+  );
+}
+
+export async function getOptionalSession(req: NextRequest): Promise<{ user?: { sub: string; email?: string; name?: string } } | null> {
+  if (!isAuth0Configured()) {
+    return null;
+  }
+
+  try {
+    const session = await getSession(req, NextResponse.next());
+    if (!session?.user?.sub) {
+      return null;
+    }
+    return {
+      user: {
+        sub: session.user.sub as string,
+        email: session.user.email as string | undefined,
+        name: session.user.name as string | undefined,
+      }
+    };
+  } catch {
+    return null;
+  }
+}
 
 const HASHED_ACCESS_TOKEN = ACCESS_TOKEN ? 
   crypto.createHash('sha256').update(ACCESS_TOKEN).digest('hex') : null;
@@ -27,8 +64,13 @@ export async function validateSessionToken(req: NextRequest) {
 
 export function withSessionAuth(handler: Function) {
   return async function(req: NextRequest) {
+    // Bypass session validation if Auth0 or Redis is not configured
+    if (!isAuth0Configured() || !isRedisAvailable()) {
+      return handler(req);
+    }
+
     const isValid = await validateSessionToken(req);
-    
+
     if (!isValid) {
       return new Response(
         JSON.stringify({
@@ -43,7 +85,7 @@ export function withSessionAuth(handler: Function) {
         }
       );
     }
-    
+
     return handler(req);
   }
 }
@@ -77,26 +119,29 @@ export function checkApiAccessToken(request: Request): NextResponse | null {
   if (!HASHED_ACCESS_TOKEN) {
     return null;
   }
-  
+
   const authHeader = request.headers.get('Authorization');
   const accessToken = authHeader?.split(' ')[1];
-  
+
   // If access token is required but not provided
   if (!accessToken) {
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'Access token required',
       message: 'This application requires an access token to continue'
     }, { status: 403 });
   }
 
+  // Hash the provided token for comparison
+  const hashedProvidedToken = crypto.createHash('sha256').update(accessToken).digest('hex');
+
   // If access token is provided but doesn't match
-  if (!secureCompare(accessToken, HASHED_ACCESS_TOKEN)) {
-    return NextResponse.json({ 
+  if (!secureCompare(hashedProvidedToken, HASHED_ACCESS_TOKEN)) {
+    return NextResponse.json({
       error: 'Invalid Access token',
-      message: 'The provided access token is invalid' 
+      message: 'The provided access token is invalid'
     }, { status: 403 });
   }
-  
+
   // Authentication successful
   return null;
 } 
