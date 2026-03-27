@@ -85,13 +85,13 @@ async function updateHealthyEndpoints(): Promise<void> {
 /**
  * Get the next healthy WebSocket endpoint in round-robin fashion
  */
-function getNextEndpoint(): string {
+function getNextEndpoint(): string | null {
   if (healthyEndpoints.length === 0) {
     healthyEndpoints = [...WS_TRANSCRIPTION_URLS];
   }
   
   if (healthyEndpoints.length === 0) {
-    throw new Error('No WebSocket transcription endpoints configured');
+    return null;
   }
   
   const endpoint = healthyEndpoints[currentIndex];
@@ -108,7 +108,14 @@ async function handleGetRequest() {
   await updateHealthyEndpoints();
   
   const endpoint = getNextEndpoint();
-  
+
+  if (!endpoint) {
+    return NextResponse.json(
+      { error: 'No transcription endpoints configured' },
+      { status: 503 }
+    );
+  }
+
   return NextResponse.json({
     url: endpoint,
     healthyEndpoints: healthyEndpoints.length,
