@@ -2,18 +2,20 @@
 
 import { Message } from 'ai';
 import { AnimatePresence, motion } from 'framer-motion';
-import { FolderPlus, CirclePlus, PanelRightOpen, Heart, Ellipsis, PlugZap, Globe, ChartBarBig, ChartColumnIncreasing, Settings, Package } from 'lucide-react';
+import { FolderPlus, CirclePlus, PanelRightOpen, Heart, Ellipsis, PlugZap, Globe, ChartBarBig, ChartColumnIncreasing, Settings, Package, Keyboard } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { useDrop } from 'react-dnd';
 
 import { Folder } from '@/hooks/use-folders';
+import { KeyboardShortcut } from '@/hooks/use-keyboard-shortcuts';
 import { cn } from '@/lib/utils';
 
 import { DraggableChatItem } from '../draggable-chat-item';
 import { DroppableFolder } from '../droppable-folder';
 import { Button } from '../ui/button';
+import { KeyboardShortcutsModal } from '../ui/keyboard-shortcuts-modal';
 
 export interface ChatHistory {
   id: string;
@@ -40,13 +42,18 @@ interface ChatSidebarProps {
   onRenameChat: (chatId: string, newName: string) => void;
   onMoveToFolder: (chatId: string, folderId: string | null) => void;
   folders: Folder[];
-  onCreateFolder: (name: string) => void;
+  onCreateFolder: (name: string) => Promise<string>;
   onUpdateFolder: (id: string, name: string) => void;
   onDeleteFolder: (id: string) => void;
   isLoading: boolean;
   onExportChats: () => void;
   onImportChats: (file: File) => Promise<void>;
   onConfigureModel: () => void;
+  shortcuts?: KeyboardShortcut[];
+  user?: any;
+  forceUpdateCounter?: number;
+  isShortcutsModalOpen?: boolean;
+  setIsShortcutsModalOpen?: (open: boolean) => void;
 }
 
 export function ChatSidebar({
@@ -69,13 +76,18 @@ export function ChatSidebar({
   onExportChats,
   onImportChats,
   onConfigureModel,
+  shortcuts,
+  user,
+  forceUpdateCounter,
+  isShortcutsModalOpen,
+  setIsShortcutsModalOpen,
 }: ChatSidebarProps) {
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState('');
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
+  
+  const [expandedFolders, _setExpandedFolders] = useState<Record<string, boolean>>({});
   const [hoveredFolder, setHoveredFolder] = useState<string | null>(null);
   const [isFollowOpen, setIsFollowOpen] = useState(false);
   const [isMoreInfoOpen, setIsMoreInfoOpen] = useState(false);
@@ -134,7 +146,7 @@ export function ChatSidebar({
     }
   };
 
-  const [{ }, dropRef] = useDrop<{ id: string; type: string }, void, { isOver: boolean }>(() => ({
+  const [ _, dropRef] = useDrop<{ id: string; type: string }, void, { isOver: boolean }>(() => ({
     accept: 'CHAT',
     drop: (item, monitor) => {
       if (monitor.isOver({ shallow: true })) {
@@ -153,6 +165,7 @@ export function ChatSidebar({
     if (isLoading) { return; }
     const chat = chats.find(c => c.id === chatId);
     if (chat) {
+      // setSelectedChat is actually handleChatSelect from context, which properly manages private mode
       setSelectedChat(chatId);
       onSelectChat(chat.messages);
 
@@ -164,7 +177,7 @@ export function ChatSidebar({
         router.push('/');
       } else if (isChatPage && chat.model && chat.model.id) {
         // If on chat page and the chat has a model, update the URL to reflect the model
-        router.push(`/models/${chat.model.id}/chat/`);
+        router.push(`/models/${encodeURIComponent(chat.model.id)}/chat/`);
       }
 
       if (isMobile) {
@@ -191,22 +204,38 @@ export function ChatSidebar({
     setEditingFolderId(null);
   };
 
-  const handleCreateFolder = () => {
+  const handleCreateFolder = async () => {
     if (newFolderName.trim()) {
-      onCreateFolder(newFolderName.trim());
-      setNewFolderName('');
-      setIsCreatingFolder(false);
+      try {
+        await onCreateFolder(newFolderName.trim());
+        setNewFolderName('');
+        setIsCreatingFolder(false);
+      } catch (error) {
+        console.error('Failed to create folder:', error);
+        alert('Failed to create folder. Please try again.');
+      }
     }
   };
 
   const renderChatList = (folderId: string | null = null) => {
-    const filteredChats = chats
-      .filter(chat => chat.folderId === folderId)
+    const isLoggedIn = !!user?.sub;
+    
+    const folderFilteredChats = chats
+      .filter(chat => {
+        // Only show database chats if user is logged in
+        const isDatabaseChat = (chat as any).source === 'database';
+        
+        if (isDatabaseChat && !isLoggedIn) {
+          return false;
+        }
+        
+        return chat.folderId === folderId;
+      })
       .reverse();
-
+    
     return (
       <div className="space-y-1">
-        {filteredChats.map((chat) => (
+        {folderFilteredChats.map((chat) => (
           editingChatId === chat.id ? (
             <form
               key={chat.id}
@@ -317,7 +346,7 @@ export function ChatSidebar({
 
               {/* Chat List */}
               <div
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                
                 ref={dropRef as any}
                 className="flex-1 overflow-y-auto p-2"
               >
@@ -356,7 +385,10 @@ export function ChatSidebar({
                 ) : null}
 
                 {/* Combined folders and chats in a unified list */}
-                <div className="space-y-1">
+                <div 
+                  key={`chat-list-${forceUpdateCounter}-${chats.length}-${user?.sub ? 'logged-in' : 'logged-out'}`}
+                  className="space-y-1"
+                >
                   {/* Create a combined array of folders and ungrouped chats */}
                   {(() => {
                     // Helper function to get the timestamp of the most recent message in a chat
@@ -374,7 +406,16 @@ export function ChatSidebar({
 
                     // Get the latest activity timestamp for a folder (based on its chats)
                     const getFolderLatestActivity = (folderId: string): number => {
-                      const folderChats = chats.filter(chat => chat.folderId === folderId);
+                      const folderChats = chats.filter(chat => {
+                        // Only consider non-database chats when user is not logged in
+                        const isDatabaseChat = (chat as any).source === 'database';
+                        const isLoggedIn = !!user?.sub;
+                        
+                        if (isDatabaseChat && !isLoggedIn) {
+                          return false;
+                        }
+                        return chat.folderId === folderId;
+                      });
                       if (folderChats.length === 0) {
                         return 0; // Empty folder
                       }
@@ -384,7 +425,17 @@ export function ChatSidebar({
 
                     // Get ungrouped chats
                     const ungroupedChats = chats
-                      .filter(chat => chat.folderId === null)
+                      .filter(chat => {
+                        // Only show database chats if user is logged in
+                        const isDatabaseChat = (chat as any).source === 'database';
+                        const isLoggedIn = !!user?.sub;
+                        
+                        if (isDatabaseChat && !isLoggedIn) {
+                          return false;
+                        }
+                        
+                        return chat.folderId === null;
+                      })
                       .map(chat => ({
                         type: 'chat' as const,
                         item: chat,
@@ -393,17 +444,17 @@ export function ChatSidebar({
                       }));
 
                     // Get folders
-                    const folderItems = folders.map(folder => ({
-                      type: 'folder' as const,
-                      item: folder,
-                      // Sort by latest activity in any chat within the folder
-                      sortKey: getFolderLatestActivity(folder.id)
-                    }));
+                    const folderItems = folders
+                      .map(folder => ({
+                        type: 'folder' as const,
+                        item: folder,
+                        // Sort by latest activity in any chat within the folder
+                        sortKey: getFolderLatestActivity(folder.id)
+                      }));
 
                     // Combine and sort by the most recent activity timestamp (newest first)
                     const combinedItems = [...ungroupedChats, ...folderItems]
                       .sort((a, b) => b.sortKey - a.sortKey);
-
                     // Function to get a readable time category for a timestamp
                     const getTimeCategory = (timestamp: number): string => {
                       if (timestamp === 0) { return "No Recent Activity"; }
@@ -655,13 +706,13 @@ export function ChatSidebar({
                   />
                 </div>
 
-                <Link href="https://chatapi.akash.network" target="_blank" rel="noopener noreferrer">
+                <Link href="https://akashml.com" target="_blank" rel="noopener noreferrer">
                   <Button
                     variant="ghost"
                     className="w-full justify-start gap-2 h-8 px-2 text-sm font-light hover:bg-white dark:hover:bg-accent hover:text-accent-foreground"
                   >
                     <PlugZap className="w-3.5 h-3.5" />
-                    <span>AkashChat API</span>
+                    <span>API Access</span>
                   </Button>
                 </Link>
 
@@ -706,7 +757,7 @@ export function ChatSidebar({
                             <span>Akash Github</span>
                           </Button>
                         </Link>
-                        <Link href="https://twitter.com/akashnet_" target="_blank" rel="noopener noreferrer">
+                        <Link href="https://twitter.com/akashnet" target="_blank" rel="noopener noreferrer">
                           <Button
                             variant="ghost"
                             className="w-full justify-start gap-2 h-8 px-2 text-sm font-light hover:bg-accent hover:text-accent-foreground"
@@ -873,6 +924,23 @@ export function ChatSidebar({
                 </div>
 
                 <div className="h-px bg-border my-0.5" />
+
+                {!isMobile && (
+                  <KeyboardShortcutsModal 
+                    shortcuts={shortcuts || []} 
+                    isOpen={isShortcutsModalOpen}
+                    onOpenChange={setIsShortcutsModalOpen}
+                    trigger={
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-start gap-2 h-8 px-2 text-sm font-light hover:bg-white dark:hover:bg-accent hover:text-accent-foreground"
+                      >
+                        <Keyboard className="w-3.5 h-3.5" />
+                        <span>Keyboard Shortcuts</span>
+                      </Button>
+                    }
+                  />
+                )}
 
                 <Button
                   variant="ghost"

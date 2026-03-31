@@ -6,11 +6,6 @@ export interface EndpointConfig {
   weight?: number;
 }
 
-export interface ModelInfo {
-  id: string;
-  endpoints: EndpointConfig[];
-}
-
 export interface ModelsResponse {
   data: Array<{
     id: string;

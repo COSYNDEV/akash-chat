@@ -11,7 +11,7 @@
   This flexible and scalable gateway orchestrates Large Language Model APIs across Akash Network's decentralized cloud ecosystem, providing efficient load balancing and automatic failover for LLM endpoints running on Akash's cost-effective GPU infrastructure.
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![X (formerly Twitter) Follow](https://img.shields.io/twitter/follow/akashnet_)](https://x.com/akashnet_ "Follow Akash Network on X")
+[![X (formerly Twitter) Follow](https://img.shields.io/twitter/follow/akashnet)](https://x.com/akashnet "Follow Akash Network on X")
 [![Discord](https://img.shields.io/badge/discord-join-7289DA.svg?logo=discord&longCache=true&style=flat)](https://discord.gg/akash "Join Akash Discord")
 </div>
 

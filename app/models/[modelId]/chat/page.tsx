@@ -10,11 +10,11 @@ import { ChatMessages } from '@/components/chat/chat-messages';
 import { ModelConfig } from '@/components/model-config';
 import { Button } from "@/components/ui/button";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function ModelDetailPage( {params}: any) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   const promiseParams: any = use(params);
-  const modelId = promiseParams?.modelId || '';
+  const encodedModelId = promiseParams?.modelId || '';
+  const modelId = decodeURIComponent(encodedModelId);
   const router = useRouter();
   
   const {
@@ -61,14 +61,19 @@ export default function ModelDetailPage( {params}: any) {
   // Effect to set model on mount
   useEffect(() => {
     if (availableModels.length > 0 && modelId) {
-      const foundModel = availableModels.find(m => m.id.toLowerCase() === modelId.toLowerCase());
-      
+      // Look for model using either id or model_id field (database models use model_id)
+      const foundModel = availableModels.find(m => 
+        (m.id && m.id.toLowerCase() === modelId.toLowerCase()) ||
+        (m.model_id && m.model_id.toLowerCase() === modelId.toLowerCase())
+      );
       if (foundModel) {
         setModel(foundModel);
         
         if (foundModel.available) {
           // Set the model but don't redirect
-          setModelSelection(foundModel.id);
+          // Set the model but don't redirect - use model_id if available, fallback to id
+          const modelSelectionId = foundModel.model_id || foundModel.id;
+          setModelSelection(modelSelectionId);
           
           // Only create a new chat if there isn't one already
           if (messages.length === 0 && !selectedChat) {
@@ -153,7 +158,7 @@ export default function ModelDetailPage( {params}: any) {
                 <meta itemProp="description" content="A platform for chatting with various AI language models" />
                 <meta itemProp="applicationCategory" content="ChatApplication" />
                 <meta itemProp="operatingSystem" content="Any" />
-                <meta itemProp="url" content={`https://chat.akash.network/models/${modelId}/chat`} />
+                <meta itemProp="url" content={`https://chat.akash.network/models/${encodeURIComponent(modelId)}/chat`} />
                 
                 {/* Chat Service Properties */}
                 <div itemProp="offers" itemScope itemType="https://schema.org/Service">

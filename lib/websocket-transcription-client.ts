@@ -2,7 +2,7 @@ interface WebSocketOptions {
   wsUrl?: string;
   model?: string;
   onTranscript?: (text: string) => void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  
   onError?: (error: any) => void;
   onClose?: () => void;
   onReady?: () => void;
@@ -211,7 +211,7 @@ export class WebSocketTranscriptionClient {
       if (permissionStatus?.state === 'denied') {
         throw new Error("Microphone access has been denied. Please grant permission in your browser settings.");
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const browserSampleRate = this.audioContext.sampleRate;
       const targetSampleRate = 16000;
@@ -225,7 +225,7 @@ export class WebSocketTranscriptionClient {
             channelCount: 1
           } 
         });
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        
       } catch (micError: any) {
         if (micError.name === 'NotAllowedError' || micError.name === 'PermissionDeniedError') {
           throw new Error("Microphone access was denied. Please allow microphone access in your browser settings.");

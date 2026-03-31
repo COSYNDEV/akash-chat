@@ -11,8 +11,9 @@ export async function generateMetadata(
   // Get parent metadata (from root layout)
   const parentMetadata = await parent;
   const previousImages = parentMetadata.openGraph?.images || [];
-  
-  const { modelId } = await params;
+
+  const { modelId: encodedModelId } = await params;
+  const modelId = decodeURIComponent(encodedModelId);
   const model = models.find(m => m.id.toLowerCase() === modelId.toLowerCase());
   
   if (!model) {
@@ -42,7 +43,7 @@ export async function generateMetadata(
     openGraph: {
       title: `Chat with ${model.name} - Free AI Chat`,
       description: fullDescription,
-      url: `https://chat.akash.network/models/${modelId}`,
+      url: `https://chat.akash.network/models/${encodeURIComponent(modelId)}`,
       images: previousImages,
       type: 'website',
     },
@@ -76,8 +77,9 @@ export default function ModelLayout({
   params: Promise<{ modelId: string }>;
 }) {
   const resolvedParams = use(params);
-  const modelId = resolvedParams?.modelId || '';
-  
+  const encodedModelId = resolvedParams?.modelId || '';
+  const modelId = decodeURIComponent(encodedModelId);
+
   // Find the model
   const model = models.find(m => m.id.toLowerCase() === modelId.toLowerCase());
   
@@ -96,7 +98,7 @@ export default function ModelLayout({
       <meta itemProp="description" content={model.description || `AI language model available on AkashChat`} />
       <meta itemProp="applicationCategory" content="ArtificialIntelligenceApplication" />
       <meta itemProp="applicationSubCategory" content="AI Chat" />
-      <meta itemProp="url" content={`https://chat.akash.network/models/${modelId}`} />
+      <meta itemProp="url" content={`https://chat.akash.network/models/${encodeURIComponent(modelId)}`} />
       
       {children}
     </div>

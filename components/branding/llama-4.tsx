@@ -1,4 +1,4 @@
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 export const Llama4Logo = (props: any) => {
     return (
         <svg width="100%" height="100%" viewBox="0 0 1200 420" xmlns="http://www.w3.org/2000/svg" {...props}>

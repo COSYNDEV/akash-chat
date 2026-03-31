@@ -1,5 +1,6 @@
 export interface Model {
   id: string;
+  model_id?: string;
   name: string;
   description?: string;
   available?: boolean;
@@ -14,9 +15,103 @@ export interface Model {
   infoContent?: string;
   thumbnailId?: string;
   deployUrl?: string;
+  // Optional field to map to different API model IDs
+  apiId?: string;
+  // New fields for API availability and categorization
+  category?: string;
+  isApiAvailable?: boolean;
+  isChatAvailable?: boolean;
 }
 
 export const models: Model[] = [
+  {
+    id: 'Qwen3-Next-80B-A3B-Instruct',
+    name: 'Qwen3 Next 80B A3B',
+    apiId: 'Qwen/Qwen3-Next-80B-A3B-Instruct',
+    description: 'MoE model with 80B parameters (3B active) and long context',
+    temperature: 0.7,
+    top_p: 0.8,
+    tokenLimit: 262144,
+    parameters: '80B (3B active)',
+    architecture: 'Hybrid Attention with High-Sparsity MoE',
+    hf_repo: 'Qwen/Qwen3-Next-80B-A3B-Instruct',
+    aboutContent: `Experience **Qwen3 Next 80B A3B**, an innovative Mixture-of-Experts model with 80B total parameters and only 3B activated per token. This cutting-edge model features Hybrid Attention combining Gated DeltaNet and Gated Attention, delivering exceptional performance with 10x inference throughput for long contexts.
+
+With native support for 262K tokens (extensible up to 1M tokens), Qwen3 Next excels in knowledge tasks, reasoning, coding, and multilingual applications. The high-sparsity MoE architecture ensures efficient computation while maintaining performance comparable to much larger models.`,
+    infoContent: `
+* ⚡ Revolutionary 80B model with only 3B activation per token
+* 🧠 Ultra-long context support up to 262K tokens (1M with scaling)
+* 🌐 Decentralized hosting for cost-effective, unrestricted access
+* 🔍 Hybrid Attention architecture for superior long-context performance`,
+    thumbnailId: 'llama-3',
+    //deployUrl: 'https://console.akash.network/templates/akash-network-awesome-akash-Qwen3-Next-80B-A3B-Instruct'
+  },
+  {
+    id: 'NousResearch-Hermes-4-405B-FP8',
+    name: 'Hermes 4 405B',
+    apiId: 'NousResearch/Hermes-4-405B-FP8',
+    description: 'Frontier reasoning model with hybrid mode capabilities',
+    temperature: 0.6,
+    top_p: 0.9,
+    tokenLimit: 65536,
+    parameters: '405B',
+    architecture: 'Llama-3.1-405B with reasoning enhancement',
+    hf_repo: 'NousResearch/Hermes-4-405B-FP8',
+    aboutContent: `Experience **Hermes 4 405B FP8**, Nous Research's frontier reasoning model built on Llama-3.1-405B. This advanced model features hybrid mode capabilities with deliberation reasoning using <think>...</think> tags, delivering exceptional performance in math, code, STEM, logic, and creative tasks.
+
+Hermes 4 excels in function calling, tool use, schema adherence, and structured JSON outputs while maintaining reduced refusal rates and high steerability. The FP8 quantized version provides efficient deployment without compromising on the model's advanced reasoning capabilities.`,
+    infoContent: `
+* ⚡ Advanced reasoning with deliberation mode support
+* 🧠 Function calling and tool use capabilities
+* 🌐 Decentralized hosting for lower costs & full control
+* 🔍 Optimized for math, code, STEM, logic, and creative tasks`,
+    thumbnailId: 'llama-3',
+    deployUrl: 'https://console.akash.network/templates/akash-network-awesome-akash-Hermes-4-405B-FP8'
+  },
+  {
+    id: 'DeepSeek-V3.1',
+    name: 'DeepSeek V3.1',
+    apiId: 'deepseek-ai/DeepSeek-V3.1',
+    description: 'Next-generation reasoning model with enhanced capabilities',
+    temperature: 0.6,
+    top_p: 0.95,
+    tokenLimit: 64000,
+    parameters: '685B',
+    architecture: 'Mixture-of-Experts',
+    hf_repo: 'deepseek-ai/DeepSeek-V3.1',
+    aboutContent: `Discover **DeepSeek V3.1**, the latest advancement in DeepSeek's flagship model series. This state-of-the-art 685B parameter Mixture-of-Experts (MoE) architecture delivers exceptional performance across reasoning, coding, mathematics, and general intelligence tasks.
+
+DeepSeek V3.1 features improved training methodologies, enhanced reasoning capabilities, and superior instruction following. With its advanced architecture and extensive knowledge base, it excels at complex problem-solving, creative tasks, and professional applications requiring deep understanding and analytical thinking.`,
+    infoContent: `
+* ⚡ Cutting-edge DeepSeek V3.1 with 685B parameters
+* 🧠 Advanced MoE architecture for superior reasoning and problem-solving
+* 🌐 Decentralized hosting for cost-effective, unrestricted access
+* 🔍 Optimized for coding, mathematics, reasoning, and creative tasks`,
+    thumbnailId: 'deepseek',
+    deployUrl: 'https://console.akash.network/templates/akash-network-awesome-akash-DeepSeek-V3.1'
+  },
+  {
+    id: 'openai-gpt-oss-120b',
+    name: 'GPT-OSS-120B',
+    apiId: 'openai/gpt-oss-120b',
+    description: 'Efficient reasoning model with 117B parameters (5.1B active)',
+    temperature: 0.6,
+    top_p: 0.95,
+    tokenLimit: 128000,
+    parameters: '117B (5.1B active)',
+    architecture: 'Transformer with native MXFP4 quantization',
+    hf_repo: 'openai/gpt-oss-120b',
+    aboutContent: `Experience **GPT-OSS-120B**, OpenAI's open-source reasoning model with 117B total parameters and 5.1B active parameters. Built with native MXFP4 quantization, this model is designed for powerful reasoning, agentic tasks, and versatile developer use cases.
+
+GPT-OSS-120B features configurable reasoning levels (Low, Medium, High) and supports advanced capabilities like tool use, web browsing, and function calling. Optimized to run efficiently on a single H100 GPU while delivering high-quality reasoning performance.`,
+    infoContent: `
+* ⚡ Open-source reasoning model with configurable reasoning levels
+* 🧠 117B parameters (5.1B active) with native MXFP4 quantization
+* 🌐 Decentralized hosting for lower costs & full control
+* 🔍 Optimized for reasoning, agentic tasks, and tool use`,
+    thumbnailId: 'llama-3',
+    deployUrl: 'https://console.akash.network/templates/akash-network-awesome-akash-openai-gpt-oss-120b'
+  },
   {
     id: 'Kimi-K2-Instruct',
     name: 'Kimi K2 Instruct',
@@ -55,6 +150,7 @@ Qwen3 235B A22B delivers superior performance in complex logical reasoning, math
   {
     id: 'Qwen3-235B-A22B-Instruct-2507-FP8',
     name: 'Qwen3 235B A22B Instruct 2507',
+    apiId: 'Qwen/Qwen3-235B-A22B-Instruct-2507-FP8',
     description: 'Enhanced reasoning and alignment in a non-thinking model',
     temperature: 0.7,
     top_p: 0.8,
@@ -97,6 +193,7 @@ With native 262K context length support and improved long-context understanding,
   {
     id: 'DeepSeek-R1-0528',
     name: 'DeepSeek R1 0528',
+    apiId: 'deepseek-ai/DeepSeek-R1-0528',
     description: 'Strong Mixture-of-Experts (MoE) LLM',
     temperature: 0.6,
     top_p: 0.95,
@@ -118,6 +215,7 @@ The 0528 version introduces refined training techniques and improved reasoning p
   {
     id: 'meta-llama-Llama-4-Maverick-17B-128E-Instruct-FP8',
     name: 'Llama 4 Maverick 17B 128E',
+    apiId: 'meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8',
     description: '400B parameter model (17B active) with 128 experts',
     temperature: 0.6,
     top_p: 0.9,
@@ -181,6 +279,7 @@ Qwen QwQ-32B blends fast inference with high accuracy, making it ideal for resea
   {
     id: 'Meta-Llama-3-3-70B-Instruct',
     name: 'Llama 3.3 70B',
+    apiId: 'meta-llama/Llama-3.3-70B-Instruct',
     description: 'Well-rounded model with strong capabilities',
     temperature: 0.6,
     top_p: 0.9,
@@ -308,6 +407,7 @@ With 405 billion parameters, this model excels at deep understanding, long-conte
     id: 'AkashGen',
     name: 'AkashGen',
     description: 'Generate images using AkashGen',
+    available: true,
     temperature: 0.85,
     top_p: 1,
     tokenLimit: 12000,
@@ -321,5 +421,44 @@ With 405 billion parameters, this model excels at deep understanding, long-conte
 ];
 
 // in case the `DEFAULT_MODEL` environment variable is not set or set to an unsupported model
-export const fallbackModelID = 'Qwen3-235B-A22B-Instruct-2507-FP8';
-export const defaultModel = process.env.DEFAULT_MODEL || fallbackModelID; 
+export const fallbackModelID = 'Qwen3-Next-80B-A3B-Instruct';
+export const defaultModel = process.env.DEFAULT_MODEL || fallbackModelID;
+
+/**
+ * Creates a mapping from API model IDs to config model IDs
+ * This allows us to maintain consistent model IDs in our config while handling changes in the API
+ */
+export function createApiToConfigIdMap(): Map<string, string> {
+  const map = new Map<string, string>();
+  
+  models.forEach(model => {
+    // If apiId is specified, map it to the config id
+    if (model.apiId) {
+      map.set(model.apiId, model.id);
+    }
+    // Also map the config id to itself (for direct matches)
+    map.set(model.id, model.id);
+  });
+  
+  return map;
+}
+
+/**
+ * Creates a mapping from config model IDs to API model IDs
+ * Used when making API calls to translate our config IDs to the actual API IDs
+ */
+export function createConfigToApiIdMap(): Map<string, string> {
+  const map = new Map<string, string>();
+  
+  models.forEach(model => {
+    // If apiId is specified, map config id to API id
+    if (model.apiId) {
+      map.set(model.id, model.apiId);
+    } else {
+      // Otherwise, use the same id
+      map.set(model.id, model.id);
+    }
+  });
+  
+  return map;
+} 

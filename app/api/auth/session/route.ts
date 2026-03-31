@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 
 import { CACHE_TTL } from '@/app/config/api';
 import { checkApiAccessToken } from '@/lib/auth';
-import { storeSession } from '@/lib/redis';
+import { storeSession, validateSession, isRedisAvailable } from '@/lib/redis';
 
 export async function GET(request: Request) {
   if (process.env.NODE_ENV === 'production') {
@@ -27,12 +27,56 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Invalid request - invalid fetch mode' }, { status: 403 });
     }
   }
-  
+
+  // If Redis is not available, use a simple cookie flag instead
+  if (!isRedisAvailable()) {
+    const cookieHeader = request.headers.get('cookie');
+    const hasAuthCookie = cookieHeader?.includes('session_token=validated');
+
+    // If already validated (has cookie), allow through
+    if (hasAuthCookie) {
+      return NextResponse.json({ success: true });
+    }
+
+    // No cookie, require access token
+    const authCheckResponse = checkApiAccessToken(request);
+    if (authCheckResponse) {
+      return authCheckResponse;
+    }
+
+    // Access token valid, set persistent cookie
+    const response = NextResponse.json({ success: true });
+    response.cookies.set('session_token', 'validated', {
+      httpOnly: process.env.NODE_ENV === 'production',
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60,
+      path: '/',
+      partitioned: process.env.NODE_ENV === 'production',
+    });
+    return response;
+  }
+
+  // Check if there's already a valid session cookie
+  const cookieHeader = request.headers.get('cookie');
+  const existingToken = cookieHeader?.split(';')
+    .find(c => c.trim().startsWith('session_token='))
+    ?.split('=')[1];
+
+  if (existingToken) {
+    const isValid = await validateSession(existingToken);
+    if (isValid) {
+      return NextResponse.json({ success: true });
+    }
+  }
+
+  // No valid session, require access token
   const authCheckResponse = checkApiAccessToken(request);
   if (authCheckResponse) {
     return authCheckResponse;
   }
 
+  // Create new session
   const sessionToken = crypto.randomBytes(32).toString('hex');
 
   await storeSession(sessionToken);

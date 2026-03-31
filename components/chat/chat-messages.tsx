@@ -9,6 +9,7 @@ import { ContextFile } from '@/app/context/ChatContext';
 import { AkashChatLogo } from '@/components/branding/akash-chat-logo';
 import { ChatInput } from '@/components/chat/chat-input';
 import { Message } from '@/components/message';
+import { useRateLimit } from '@/hooks/use-rate-limit';
 
 interface ChatMessagesProps {
   messages: AIMessage[];
@@ -27,6 +28,8 @@ interface ChatMessagesProps {
   sessionInitialized: boolean;
   showStopButton?: boolean;
   setMessages: (messages: AIMessage[]) => void;
+  isPrivateMode?: boolean;
+  onPrivateModeToggle?: () => void;
 }
 
 export function ChatMessages({
@@ -45,7 +48,9 @@ export function ChatMessages({
   handleBranch,
   sessionInitialized,
   showStopButton = false,
-  setMessages
+  setMessages,
+  isPrivateMode = false,
+  onPrivateModeToggle
 }: ChatMessagesProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -191,6 +196,9 @@ export function ChatMessages({
     };
   }, []);
 
+  // Use centralized rate limit hook
+  const { blocked } = useRateLimit();
+
   return (
     <>
       <div
@@ -216,6 +224,10 @@ export function ChatMessages({
                   contextFiles={contextFiles}
                   className="relative"
                   isInitialized={sessionInitialized}
+                  isLimitReached={blocked}
+                  isPrivateMode={isPrivateMode}
+                  onPrivateModeToggle={onPrivateModeToggle}
+                  hasMessages={false}
                 />
               </div>
             </div>
@@ -282,6 +294,10 @@ export function ChatMessages({
             className="max-w-3xl mx-auto"
             showStopButton={showStopButton}
             isInitialized={sessionInitialized}
+            isLimitReached={blocked}
+            isPrivateMode={isPrivateMode}
+            onPrivateModeToggle={onPrivateModeToggle}
+            hasMessages={true}
           />
           <p className="text-xs text-muted-foreground text-center mt-2">
             {AI_NOTICE}

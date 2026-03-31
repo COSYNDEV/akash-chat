@@ -43,7 +43,13 @@ export function ModelsLayoutClient({ children }: ModelsLayoutClientProps) {
     accessTokenInput,
     setAccessTokenInput,
     handleAccessTokenSubmit,
-    modelError
+    modelError,
+    messages,
+    stop,
+    reload,
+    contextFiles,
+    setContextFiles,
+    user
   } = useChatContext();
 
   return (
@@ -78,6 +84,12 @@ export function ModelsLayoutClient({ children }: ModelsLayoutClientProps) {
         setAccessTokenInput={setAccessTokenInput}
         handleAccessTokenSubmit={handleAccessTokenSubmit}
         modelError={modelError}
+        messages={messages}
+        stop={stop}
+        reload={reload}
+        contextFiles={contextFiles}
+        setContextFiles={setContextFiles}
+        user={user}
       >
         {children}
       </MainLayout>

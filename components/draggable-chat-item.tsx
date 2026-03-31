@@ -73,7 +73,7 @@ export function DraggableChatItem({
 
   return (
     <div
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      
       ref={drag as any}
       className={cn(
         "group relative",
