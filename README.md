@@ -175,4 +175,4 @@ For more information, visit [akash.network](https://akash.network) or join the [
 
 ## License
 
-See [LICENSE](LICENSE)
+See [LICENSE](license)
