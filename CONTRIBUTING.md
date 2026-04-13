@@ -20,7 +20,7 @@ By participating in this project, you agree to maintain a respectful and inclusi
    ```
 4. **Install dependencies**:
    ```bash
-   npm install
+   pnpm install
    ```
 5. **Set up environment variables**:
    Create a `.env.local` file in the root directory with the necessary environment variables (refer to the README for required variables)
@@ -44,13 +44,13 @@ By participating in this project, you agree to maintain a respectful and inclusi
 3. **Run linting** to ensure code quality:
 
    ```bash
-   npm run lint
+   pnpm lint
    ```
 
 4. **Test your changes** by running the development server:
 
    ```bash
-   npm run dev
+   pnpm dev
    ```
 
 5. **Commit your changes** with a clear, descriptive message following the [Conventional Commits](https://www.conventionalcommits.org/) specification:
