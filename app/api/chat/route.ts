@@ -9,7 +9,6 @@ import { defaultModel } from '@/app/config/models';
 import { withSessionAuth, getOptionalSession } from '@/lib/auth';
 import { getAvailableModelsForUser } from '@/lib/models';
 import { checkTokenLimit, incrementTokenUsageWithMultiplier, getClientIP, getRateLimitConfigForUser, storeConversationTokens } from '@/lib/rate-limit';
-import { LiteLLMService } from '@/lib/services/litellm-service';
 import { generateImageTool } from '@/lib/tools';
 
 if (!apiKey) {
@@ -99,22 +98,11 @@ function createOpenAIWithRateLimit(apiKey: string) {
   });
 }
 
-const openai = createOpenAIWithRateLimit(apiKey);
+const openaiClient = createOpenAIWithRateLimit(apiKey);
 
 async function handlePostRequest(req: NextRequest) {
   const session = await getOptionalSession(req);
   const isAuthenticated = !!session?.user;
-
-  let userApiKey: string | null = null;
-  let openaiClient = openai;
-
-  if (isAuthenticated && session?.user?.sub) {
-    userApiKey = await LiteLLMService.getApiKey(session.user.sub);
-
-    if (userApiKey) {
-      openaiClient = createOpenAIWithRateLimit(userApiKey);
-    }
-  }
 
   const isAccessTokenRequired = process.env.ACCESS_TOKEN && process.env.ACCESS_TOKEN.trim() !== '';
   let rateLimitIdentifier: string | null = null;
