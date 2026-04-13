@@ -43,7 +43,6 @@ export async function POST(req: NextRequest) {
         }, { status: 403 });
       }
 
-
       await upsertUserPreferences({
         user_id: userId,
         temperature: 0.7,
