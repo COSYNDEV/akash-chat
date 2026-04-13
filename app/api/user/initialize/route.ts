@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getOptionalSession, isAuth0Configured, isDevBypassEnabled } from '@/lib/auth';
+import { auth0Management } from '@/lib/auth0-management';
 import { getUserPreferences, upsertUserPreferences, updateUserTier } from '@/lib/database';
-import { LiteLLMService } from '@/lib/services/litellm-service';
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,13 +25,25 @@ export async function POST(req: NextRequest) {
     }
 
     const existingPreferences = await getUserPreferences(userId);
-    const key = await LiteLLMService.getApiKey(userId);
-
-    if (!key) {
-      await LiteLLMService.generateApiKey(userId);
-    }
 
     if (!existingPreferences) {
+      // Check verification requirements for new users
+      const userData = await auth0Management.getUserData(userId);
+      const emailVerified = userData.email_verified === true;
+      const marketingConsent = userData.user_metadata?.marketing_consent === true;
+
+      if (!emailVerified || !marketingConsent) {
+        return NextResponse.json({
+          error: 'Verification required',
+          message: 'Please verify your email and accept marketing consent to continue',
+          requirements: {
+            emailVerified,
+            marketingConsent
+          }
+        }, { status: 403 });
+      }
+
+
       await upsertUserPreferences({
         user_id: userId,
         temperature: 0.7,
@@ -41,11 +53,11 @@ export async function POST(req: NextRequest) {
       await updateUserTier(userId, 'extended');
     }
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: true,
       isNewUser: !existingPreferences,
-      message: existingPreferences 
-        ? 'User initialized successfully' 
+      message: existingPreferences
+        ? 'User initialized successfully'
         : 'New user created and initialized with extended tier'
     });
 

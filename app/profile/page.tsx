@@ -23,6 +23,7 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [checkingConsent, setCheckingConsent] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
+  const [emailVerifiedFromApi, setEmailVerifiedFromApi] = useState(false);
   const [deletingData, setDeletingData] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -30,35 +31,31 @@ export default function ProfilePage() {
   const [deleteType, setDeleteType] = useState<'chat' | 'account'>('chat');
   const defaultModelObj = models.find(m => m.id === defaultModel) || models[0];
 
-  const isEmailVerified = user?.email_verified || user?.emailVerified;
+  const isEmailVerified = user?.email_verified || user?.emailVerified || emailVerifiedFromApi;
 
-  // Check if user has already given marketing consent
-  useEffect(() => {
-    const checkMarketingConsent = async () => {
-      if (!user || !isEmailVerified) {return;}
-      
-      setCheckingConsent(true);
-      try {
-        const res = await fetch('/api/user/verification-status', {
-          method: 'GET',
-          credentials: 'include',
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.marketingConsent) {
-            setMarketingConsent(true);
-            // Don't set consentGiven here - this is for existing consent
-          }
-        }
-      } catch (e) {
-        console.error('Failed to check marketing consent:', e);
-      } finally {
-        setCheckingConsent(false);
+  const checkVerificationStatus = async () => {
+    if (!user) { return; }
+    setCheckingConsent(true);
+    try {
+      const res = await fetch('/api/user/verification-status', {
+        method: 'GET',
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.emailVerified) { setEmailVerifiedFromApi(true); }
+        if (data.marketingConsent) { setMarketingConsent(true); }
       }
-    };
+    } catch (e) {
+      console.error('Failed to check verification status:', e);
+    } finally {
+      setCheckingConsent(false);
+    }
+  };
 
-    checkMarketingConsent();
-  }, [user, isEmailVerified]);
+  useEffect(() => {
+    checkVerificationStatus();
+  }, [user]);
 
   const handleConsent = async () => {
     setSubmitting(true);
@@ -234,8 +231,8 @@ export default function ProfilePage() {
                   You must verify your email address to continue using AkashChat. 
                   Please check your inbox for a verification email and follow the instructions.
                 </p>
-                <Button 
-                  onClick={() => window.location.reload()} 
+                <Button
+                  onClick={checkVerificationStatus}
                   variant="outline"
                   className="w-full"
                 >

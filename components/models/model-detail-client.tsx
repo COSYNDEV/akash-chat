@@ -172,8 +172,8 @@ export function ModelDetailClient({ modelId, model: serverModel, modelWithAccess
                     asChild
                     className="w-full text-md flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-6"
                   >
-                    <Link 
-                      href="/api/auth/login"
+                    <Link
+                      href="/api/auth/login?screen_hint=signup"
                       aria-label={`Sign up to access ${model.name}`}
                     >
                       {modelWithAccess?.action_text || 'Sign Up'}
