@@ -148,15 +148,7 @@ export function MainLayout({
       // If already on profile page, don't redirect
       if (pathname === '/profile') {return;}
 
-      // Check email verification
-      const isEmailVerified = user.email_verified || user.emailVerified;
-      
-      if (!isEmailVerified) {
-        router.replace('/profile');
-        return;
-      }
-
-      // Check marketing consent from user preferences
+      // Check verification via API
       try {
         const res = await fetch('/api/user/verification-status', {
           method: 'GET',
@@ -164,7 +156,7 @@ export function MainLayout({
         });
         if (res.ok) {
           const data = await res.json();
-          if (!data.marketingConsent) {
+          if (!data.isFullyVerified) {
             router.replace('/profile');
             return;
           }
