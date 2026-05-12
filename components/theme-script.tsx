@@ -1,4 +1,4 @@
-export function ThemeScript() {
+export function ThemeScript({ nonce }: { nonce: string }) {
   const codeToRunOnClient = `
     (function() {
       try {
@@ -17,6 +17,7 @@ export function ThemeScript() {
 
   return (
     <script
+      nonce={nonce}
       dangerouslySetInnerHTML={{
         __html: codeToRunOnClient,
       }}

@@ -1,0 +1,5 @@
+packages:
+  - '.'
+
+pnpmSettings:
+  minPackageAge: 10080
