@@ -29,6 +29,7 @@ jobs:
       - name: lowercase github.repository
         run: |
           echo "IMAGE_NAME=`echo ${{github.repository}} | tr '[:upper:]' '[:lower:]'`" >>${GITHUB_ENV}
+          echo "SAFE_REF_NAME=`echo ${{github.ref_name}} | tr '/' '-'`" >>${GITHUB_ENV}
       
       - name: Bump version and push tag
         id: tag_version
@@ -53,7 +54,7 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.SAFE_REF_NAME }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag_version.outputs.new_version }}
 
       - name: Build and push Docker image for non-main branches
@@ -64,8 +65,8 @@ jobs:
           push: true
           build-args: |
             NEXT_PUBLIC_GA_ID=${{ vars.NEXT_PUBLIC_GA_ID }}
-            NEXT_PUBLIC_VERSION=${{ github.ref_name }}
+            NEXT_PUBLIC_VERSION=${{ env.SAFE_REF_NAME }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.SAFE_REF_NAME }}
