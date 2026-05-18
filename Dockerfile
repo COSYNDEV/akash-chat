@@ -1,8 +1,8 @@
 # ---- Base Node ----
-FROM node:19-alpine AS base
-RUN corepack enable && corepack prepare pnpm@latest --activate
+FROM node:22-alpine AS base
+RUN corepack enable && corepack prepare pnpm@11.1.1 --activate
 WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 # ---- Dependencies ----
 FROM base AS dependencies
 RUN pnpm install --frozen-lockfile
@@ -19,8 +19,8 @@ ARG NEXT_PUBLIC_WEBSOCKET_URLS
 ENV NEXT_PUBLIC_WEBSOCKET_URLS=${NEXT_PUBLIC_WEBSOCKET_URLS}
 RUN pnpm run build
 # ---- Production ----
-FROM node:19-alpine AS production
-RUN corepack enable && corepack prepare pnpm@latest --activate
+FROM node:22-alpine AS production
+RUN corepack enable && corepack prepare pnpm@11.1.1 --activate
 WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY --from=build /app/.next ./.next
