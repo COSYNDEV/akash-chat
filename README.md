@@ -81,7 +81,7 @@ For the full-featured setup:
 
 2. Install dependencies:
    ```bash
-   npm install
+   pnpm install
    ```
 
 3. Create a `.env.local` file in the root directory.
@@ -134,7 +134,7 @@ For the full-featured setup:
 
 4. Start the development server:
    ```bash
-   npm run dev
+   pnpm dev
    ```
 
 ## Environment Variables
@@ -175,4 +175,4 @@ For more information, visit [akash.network](https://akash.network) or join the [
 
 ## License
 
-See [LICENSE](LICENSE)
+See [LICENSE](license)

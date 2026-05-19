@@ -2,6 +2,7 @@ import './globals.css';
 
 import { UserProvider } from '@auth0/nextjs-auth0/client';
 import { Inter } from 'next/font/google';
+import { headers } from 'next/headers';
 import { ThemeProvider } from 'next-themes';
 
 import { ConditionalAnalytics } from '@/components/analytics';
@@ -90,16 +91,17 @@ export const metadata = {
   }
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const nonce = (await headers()).get('x-nonce') ?? '';
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
         <meta name="color-scheme" content="light dark" />
-        <ThemeScript />
+        <ThemeScript nonce={nonce} />
       </head>
       <body className={inter.className}>
         <ThemeProvider 

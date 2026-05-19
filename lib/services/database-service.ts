@@ -1,5 +1,5 @@
-import { 
-  upsertUserPreferences, 
+import {
+  upsertUserPreferences,
   getUserPreferences,
   createChatSession,
   getUserChatSessions,
@@ -14,13 +14,10 @@ import {
   deleteFolder,
   folderExists,
   findFolderByName,
-  createUserApiKey,
-  getUserApiKey,
   type UserPreferences,
   type ChatSession,
   type ChatMessage,
-  type Folder,
-  type UserApiKey
+  type Folder
 } from '../database';
 
 import { EncryptionService, encryptChatName, encryptFolderName, decryptFolderName } from './encryption-service';
@@ -449,39 +446,6 @@ export class DatabaseService {
     };
   }
 
-  // API Key Operations
-  async createApiKey(encryptedApiKey: { encrypted: string; iv: string; tag: string }): Promise<DatabaseOperationResult<UserApiKey>> {
-    try {
-      const apiKey = await createUserApiKey({
-        user_id: this.userId,
-        litellm_api_key_encrypted_b64: encryptedApiKey.encrypted,
-        litellm_api_key_iv_b64: encryptedApiKey.iv,
-        litellm_api_key_tag_b64: encryptedApiKey.tag,
-        is_active: true
-      });
-
-      return { success: true, data: apiKey };
-    } catch (error) {
-      console.error('Failed to create API key:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
-      };
-    }
-  }
-
-  async loadApiKey(): Promise<DatabaseOperationResult<UserApiKey | null>> {
-    try {
-      const apiKey = await getUserApiKey(this.userId);
-      return { success: true, data: apiKey };
-    } catch (error) {
-      console.error('Failed to load API key:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
-      };
-    }
-  }
 }
 
 /**
